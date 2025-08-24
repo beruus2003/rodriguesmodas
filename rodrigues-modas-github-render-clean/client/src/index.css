@@ -1,0 +1,147 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: hsl(39, 48%, 95%);
+  --foreground: hsl(0, 0%, 15%);
+  --card: hsl(0, 0%, 100%);
+  --card-foreground: hsl(0, 0%, 15%);
+  --popover: hsl(0, 0%, 100%);
+  --popover-foreground: hsl(0, 0%, 15%);
+  --primary: hsl(39, 48%, 85%);
+  --primary-foreground: hsl(25, 47%, 15%);
+  --secondary: hsl(0, 0%, 0%);
+  --secondary-foreground: hsl(0, 0%, 100%);
+  --muted: hsl(39, 15%, 92%);
+  --muted-foreground: hsl(0, 0%, 40%);
+  --accent: hsl(25, 47%, 27%);
+  --accent-foreground: hsl(0, 0%, 100%);
+  --destructive: hsl(0, 84%, 60%);
+  --destructive-foreground: hsl(0, 0%, 100%);
+  --border: hsl(39, 20%, 90%);
+  --input: hsl(39, 20%, 97%);
+  --ring: hsl(25, 47%, 27%);
+  --success: hsl(142, 76%, 36%);
+  --warning: hsl(38, 92%, 50%);
+  --radius: 0.75rem;
+  --font-inter: 'Inter', sans-serif;
+}
+
+.dark {
+  --background: hsl(25, 47%, 8%);
+  --foreground: hsl(39, 15%, 90%);
+  --card: hsl(25, 47%, 12%);
+  --card-foreground: hsl(39, 15%, 90%);
+  --popover: hsl(25, 47%, 8%);
+  --popover-foreground: hsl(39, 15%, 90%);
+  --primary: hsl(25, 47%, 20%);
+  --primary-foreground: hsl(39, 48%, 95%);
+  --secondary: hsl(0, 0%, 100%);
+  --secondary-foreground: hsl(0, 0%, 0%);
+  --muted: hsl(25, 47%, 15%);
+  --muted-foreground: hsl(39, 15%, 60%);
+  --accent: hsl(39, 48%, 85%);
+  --accent-foreground: hsl(25, 47%, 15%);
+  --destructive: hsl(0, 84%, 60%);
+  --destructive-foreground: hsl(0, 0%, 100%);
+  --border: hsl(25, 47%, 20%);
+  --input: hsl(25, 47%, 15%);
+  --ring: hsl(39, 48%, 85%);
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-inter antialiased;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-medium tracking-tight;
+  }
+}
+
+@layer components {
+  .logo-container {
+    @apply relative w-10 h-10 rounded-full overflow-hidden bg-primary flex items-center justify-center;
+  }
+  
+  .gradient-primary {
+    background: linear-gradient(135deg, hsl(39, 48%, 95%) 0%, hsl(39, 48%, 85%) 100%);
+  }
+  
+  .btn-primary {
+    @apply bg-accent text-accent-foreground px-6 py-3 rounded-lg font-medium transition-all duration-200 transform;
+  }
+  
+  .btn-primary:hover {
+    @apply scale-105;
+    filter: brightness(0.9);
+  }
+  
+  .btn-secondary {
+    @apply border-2 border-accent text-accent hover:bg-accent hover:text-accent-foreground px-6 py-3 rounded-lg font-medium transition-all duration-200;
+  }
+  
+  .card-hover {
+    @apply transition-all duration-300 hover:shadow-xl hover:-translate-y-1;
+  }
+  
+  .text-gradient {
+    background: linear-gradient(135deg, hsl(25, 47%, 27%) 0%, hsl(25, 47%, 40%) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+}
+
+@layer utilities {
+  .animate-fade-in {
+    animation: fadeIn 0.5s ease-in-out;
+  }
+  
+  .animate-slide-up {
+    animation: slideUp 0.3s ease-out;
+  }
+  
+  .animate-scale-in {
+    animation: scaleIn 0.2s ease-out;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(10px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    transform: scale(0.95);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
