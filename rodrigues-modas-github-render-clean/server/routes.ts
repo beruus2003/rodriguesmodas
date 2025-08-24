@@ -61,18 +61,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/products", async (req, res) => {
-    try {
-      const validatedData = insertProductSchema.parse(req.body);
-      const product = await storage.createProduct(validatedData);
-      res.status(201).json(product);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: "Dados inválidos", errors: error.errors });
-      }
-      res.status(500).json({ message: "Erro ao criar produto" });
+ app.post("/api/products", async (req, res) => {
+  try {
+    // Debug detalhado
+    console.log("📝 Dados recebidos para produto:", JSON.stringify(req.body, null, 2));
+    console.log("🔍 Tipos dos dados:", {
+      name: typeof req.body.name,
+      description: typeof req.body.description,
+      price: typeof req.body.price,
+      category: typeof req.body.category,
+      images: Array.isArray(req.body.images) ? req.body.images.length : 'não é array',
+      colors: Array.isArray(req.body.colors) ? req.body.colors.length : 'não é array',
+      sizes: Array.isArray(req.body.sizes) ? req.body.sizes.length : 'não é array',
+      stock: typeof req.body.stock,
+      isActive: typeof req.body.isActive
+    });
+
+    // Garantir que arrays existam
+    const cleanData = {
+      ...req.body,
+      images: req.body.images || [],
+      colors: req.body.colors || [],
+      sizes: req.body.sizes || [],
+      price: typeof req.body.price === 'number' ? req.body.price.toString() : req.body.price,
+      stock: typeof req.body.stock === 'string' ? parseInt(req.body.stock) : req.body.stock || 0,
+      isActive: req.body.isActive !== undefined ? req.body.isActive : true
+    };
+
+    console.log("🔧 Dados limpos:", JSON.stringify(cleanData, null, 2));
+
+    const validatedData = insertProductSchema.parse(cleanData);
+    const product = await storage.createProduct(validatedData);
+    res.status(201).json(product);
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      console.log("❌ Erro de validação Zod:");
+      error.errors.forEach((err, index) => {
+        console.log(`  ${index + 1}. Campo: ${err.path.join('.')} | Erro: ${err.message} | Valor: ${err.received || 'undefined'}`);
+      });
+      return res.status(400).json({ 
+        message: "Dados inválidos", 
+        errors: error.errors,
+        receivedData: req.body 
+      });
     }
-  });
+    console.error("❌ Erro geral:", error);
+    res.status(500).json({ message: "Erro ao criar produto", error: error.message });
+  }
+});
 
   app.patch("/api/products/:id", async (req, res) => {
     try {
