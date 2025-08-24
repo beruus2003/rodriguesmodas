@@ -30,19 +30,20 @@ export class AuthService {
 
   async signIn(email: string, password: string): Promise<AuthUser> {
     try {
-      // Conta admin do proprietário da loja - Camila (aceita tanto como email quanto username)
-      if ((email === "Camila567" || email === "camila567") && password === "Js180620") {
-        const authUser: AuthUser = {
-          id: "admin-camila",
-          email: "contact.rodriguesmoda@gmail.com",
-          name: "Camila - Proprietária",
-          phone: "+55 85 99180-2352",
-          role: "admin",
-        };
-
-        localStorage.setItem("auth-user", JSON.stringify(authUser));
-        return authUser;
-      }
+          // Verificar login com backend
+    const response = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password })
+    });
+    
+    const result = await response.json();
+    
+    if (result.success) {
+      const authUser: AuthUser = result.user;
+      localStorage.setItem("auth-user", JSON.stringify(authUser));
+      return authUser;
+    }
 
       // Conta admin para demonstração (manter como backup)
       if (email === "admin@rodriguesmodas.com" && password === "admin123") {
