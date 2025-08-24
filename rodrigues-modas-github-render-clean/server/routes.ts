@@ -6,7 +6,31 @@ import { z } from "zod";
 import { mercadoPagoService, type PaymentData } from "./mercadopago";
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  
+    // Autenticação - Login seguro no backend
+  app.post("/api/auth/login", async (req, res) => {
+    try {
+      const { email, password } = req.body;
+      
+      // Credenciais seguras no backend
+      if ((email === "Camila567" || email === "camila567") && password === "Marialuiza0510") {
+        const authUser = {
+          id: "admin-camila",
+          email: "contact.rodriguesmoda@gmail.com",
+          name: "Camila - Proprietária",
+          phone: "+55 85 99180-2352",
+          role: "admin",
+        };
+        
+        return res.json({ success: true, user: authUser });
+      }
+      
+      // Login inválido
+      res.status(401).json({ success: false, message: "Credenciais inválidas" });
+    } catch (error) {
+      res.status(500).json({ success: false, message: "Erro no servidor" });
+    }
+  });
+ 
   // Produtos
   app.get("/api/products", async (req, res) => {
     try {
