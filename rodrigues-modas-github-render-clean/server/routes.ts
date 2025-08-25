@@ -65,18 +65,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/products", async (req, res) => {
-    try {
-      console.log("📝 Dados recebidos para produto:", JSON.stringify(req.body, null, 2));
-      
-      // Validate the request body
-      const validatedData = insertProductSchema.parse(req.body);
-      console.log("✅ Dados validados:", JSON.stringify(validatedData, null, 2));
-      
-      const product = await storage.createProduct(validatedData);
-      console.log("🎉 Produto criado:", JSON.stringify(product, null, 2));
-      
-      res.status(201).json(product);
+ app.post("/api/products", async (req, res) => {
+  try {
+    console.log("📝 Dados recebidos para produto:", JSON.stringify(req.body, null, 2));
+
+    // Se o frontend enviar imagem como base64 ou File, ajustar antes da validação
+    let productData = { ...req.body };
+
+    if (productData.image && typeof productData.image !== "string") {
+      console.log("📷 Convertendo imagem recebida...");
+      // Aqui você pode salvar em disco ou converter para base64
+      // Exemplo simples: transformar objeto em string JSON
+      productData.image = JSON.stringify(productData.image);
+    }
+
+    // Validar os dados
+    const validatedData = insertProductSchema.parse(productData);
+    console.log("✅ Dados validados:", JSON.stringify(validatedData, null, 2));
+
+    const product = await storage.createProduct(validatedData);
+    console.log("🎉 Produto criado:", JSON.stringify(product, null, 2));
+
+    res.status(201).json(product);
     } catch (error) {
       if (error instanceof z.ZodError) {
         console.log("❌ Erro de validação detalhado:");
