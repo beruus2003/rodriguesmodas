@@ -77,10 +77,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
       isActive: typeof req.body.isActive
     });
 
+    // Tratamento especial para imagens
+    let processedImages = [];
+    if (req.body.images) {
+      if (Array.isArray(req.body.images)) {
+        // Se já é array, filtrar apenas strings válidas
+        processedImages = req.body.images.filter(img => typeof img === 'string' && img.length > 0);
+        console.log("🖼️ Array de imagens detectado, strings válidas:", processedImages.length);
+      } else if (typeof req.body.images === 'string' && req.body.images.length > 0) {
+        // Se é string única, transformar em array
+        processedImages = [req.body.images];
+        console.log("🖼️ String única de imagem convertida para array");
+      } else if (req.body.images.name || req.body.images.type || req.body.images.constructor?.name === 'File') {
+        // Se é File object, rejeitar
+        console.log("⚠️ File object detectado - precisa ser URL string");
+        return res.status(400).json({ 
+          message: "Erro: Imagens devem ser URLs em formato texto, não arquivos binários",
+          tip: "Faça upload da imagem primeiro para um serviço e envie a URL resultante",
+          receivedType: typeof req.body.images,
+          receivedData: req.body.images?.constructor?.name || 'unknown'
+        });
+      } else {
+        console.log("⚠️ Formato de imagem não reconhecido:", typeof req.body.images);
+      }
+    }
+
+    console.log("🖼️ Imagens processadas:", processedImages);
+
     // Garantir que arrays existam
     const cleanData = {
       ...req.body,
-      images: req.body.images || [],
+      images: processedImages,
       colors: req.body.colors || [],
       sizes: req.body.sizes || [],
       price: typeof req.body.price === 'number' ? req.body.price.toString() : req.body.price,
@@ -421,86 +448,57 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ...(paymentMethod === 'pix' && paymentResult.point_of_interaction?.transaction_data && {
           qrCode: paymentResult.point_of_interaction.transaction_data.qr_code,
           qrCodeBase64: paymentResult.point_of_interaction.transaction_data.qr_code_base64,
-          ticketUrl: paymentResult.point_of_interaction.transaction_data.ticket_url,
         }),
       });
 
     } catch (error) {
-      console.error('Erro no processamento:', error);
       if (error instanceof z.ZodError) {
-        return res.status(400).json({ 
-          message: "Dados inválidos", 
-          errors: error.errors 
-        });
+        return res.status(400).json({ message: "Dados de pagamento inválidos", errors: error.errors });
       }
+      console.error('Erro no processamento:', error);
       res.status(500).json({ message: "Erro ao processar pagamento" });
     }
   });
 
-  // Consultar status do pagamento
-  app.get("/api/payment/:paymentId/status", async (req, res) => {
-    try {
-      const { paymentId } = req.params;
-      const paymentStatus = await mercadoPagoService.getPaymentStatus(paymentId);
-      
-      // Atualizar transação local
-      await storage.updateMpTransaction(paymentId, {
-        status: paymentStatus.status,
-        statusDetail: paymentStatus.status_detail,
-        transactionData: paymentStatus,
-      });
-
-      res.json({
-        id: paymentStatus.id,
-        status: paymentStatus.status,
-        statusDetail: paymentStatus.status_detail,
-        paymentMethodId: paymentStatus.payment_method_id,
-        paymentTypeId: paymentStatus.payment_type_id,
-        transactionAmount: paymentStatus.transaction_amount,
-        dateCreated: paymentStatus.date_created,
-        dateApproved: paymentStatus.date_approved,
-      });
-
-    } catch (error) {
-      console.error('Erro ao consultar pagamento:', error);
-      res.status(500).json({ message: "Erro ao consultar status do pagamento" });
-    }
-  });
-
-  // Webhook para receber notificações do Mercado Pago
+  // Webhook do Mercado Pago
   app.post("/api/payment/webhook", async (req, res) => {
     try {
-      const { id, topic } = req.body;
+      console.log('📲 Webhook recebido:', req.body);
       
-      if (topic === 'payment') {
-        // Consultar o pagamento atualizado
-        const paymentStatus = await mercadoPagoService.getPaymentStatus(id.toString());
+      if (req.body.type === 'payment') {
+        const paymentId = req.body.data.id;
         
-        // Atualizar transação local
-        const transaction = await storage.updateMpTransaction(id.toString(), {
-          status: paymentStatus.status,
-          statusDetail: paymentStatus.status_detail,
-          transactionData: paymentStatus,
+        // Buscar detalhes do pagamento no MP
+        const paymentDetails = await mercadoPagoService.getPaymentDetails(paymentId);
+        
+        // Atualizar transação no banco
+        await storage.updateMpTransaction(paymentId.toString(), {
+          status: paymentDetails.status,
+          statusDetail: paymentDetails.status_detail,
+          transactionData: paymentDetails,
         });
-
-        if (transaction) {
-          // Atualizar status do pedido
-          const order = await storage.getOrder(transaction.orderId);
-          if (order) {
+        
+        // Atualizar status do pedido se aprovado
+        if (paymentDetails.status === 'approved') {
+          const transaction = await storage.getMpTransaction(paymentId.toString());
+          if (transaction) {
             await storage.updateOrderPayment(
               transaction.orderId,
-              id.toString(),
-              paymentStatus.status === 'approved' ? 'approved' : 
-              paymentStatus.status === 'rejected' ? 'rejected' : 'pending'
+              paymentId.toString(),
+              'approved'
             );
           }
         }
       }
-
+      
       res.status(200).json({ received: true });
     } catch (error) {
       console.error('Erro no webhook:', error);
-      res.status(500).json({ message: "Erro ao processar webhook" });
+      res.status(500).json({ message: "Erro no webhook" });
     }
   });
+
+  const httpServer = createServer(app);
+  return httpServer;
+}
 
