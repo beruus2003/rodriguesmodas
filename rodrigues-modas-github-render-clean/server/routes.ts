@@ -6,11 +6,12 @@ import { z } from "zod";
 import { mercadoPagoService, type PaymentData } from "./mercadopago";
 
 export async function registerRoutes(app: Express): Promise<Server> {
-    // Autenticação - Login seguro no backend
+
+  // Autenticação - Login seguro no backend
   app.post("/api/auth/login", async (req, res) => {
     try {
       const { email, password } = req.body;
-      
+
       // Credenciais seguras no backend
       if ((email === "Camila567" || email === "camila567") && password === "Marialuiza0510") {
         const authUser = {
@@ -20,31 +21,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
           phone: "+55 85 99180-2352",
           role: "admin",
         };
-        
+
         return res.json({ success: true, user: authUser });
       }
-      
+
       // Login inválido
       res.status(401).json({ success: false, message: "Credenciais inválidas" });
     } catch (error) {
+      console.error('Auth error:', error);
       res.status(500).json({ success: false, message: "Erro no servidor" });
     }
   });
- 
+
   // Produtos
   app.get("/api/products", async (req, res) => {
     try {
       const { category } = req.query;
       let products;
-      
+
       if (category) {
         products = await storage.getProductsByCategory(category as string);
       } else {
         products = await storage.getProducts();
       }
-      
+
       res.json(products);
     } catch (error) {
+      console.error('Get products error:', error);
       res.status(500).json({ message: "Erro ao buscar produtos" });
     }
   });
@@ -57,94 +60,73 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       res.json(product);
     } catch (error) {
+      console.error('Get product error:', error);
       res.status(500).json({ message: "Erro ao buscar produto" });
     }
   });
 
- app.post("/api/products", async (req, res) => {
-  try {
-    // Debug detalhado
-    console.log("📝 Dados recebidos para produto:", JSON.stringify(req.body, null, 2));
-    console.log("🔍 Tipos dos dados:", {
-      name: typeof req.body.name,
-      description: typeof req.body.description,
-      price: typeof req.body.price,
-      category: typeof req.body.category,
-      images: Array.isArray(req.body.images) ? req.body.images.length : 'não é array',
-      colors: Array.isArray(req.body.colors) ? req.body.colors.length : 'não é array',
-      sizes: Array.isArray(req.body.sizes) ? req.body.sizes.length : 'não é array',
-      stock: typeof req.body.stock,
-      isActive: typeof req.body.isActive
-    });
-
-    // Tratamento especial para imagens
-    let processedImages = [];
-    if (req.body.images) {
-      if (Array.isArray(req.body.images)) {
-        // Se já é array, filtrar apenas strings válidas
-        processedImages = req.body.images.filter(img => typeof img === 'string' && img.length > 0);
-        console.log("🖼️ Array de imagens detectado, strings válidas:", processedImages.length);
-      } else if (typeof req.body.images === 'string' && req.body.images.length > 0) {
-        // Se é string única, transformar em array
-        processedImages = [req.body.images];
-        console.log("🖼️ String única de imagem convertida para array");
-      } else if (req.body.images.name || req.body.images.type || req.body.images.constructor?.name === 'File') {
-        // Se é File object, rejeitar
-        console.log("⚠️ File object detectado - precisa ser URL string");
-        return res.status(400).json({ 
-          message: "Erro: Imagens devem ser URLs em formato texto, não arquivos binários",
-          tip: "Faça upload da imagem primeiro para um serviço e envie a URL resultante",
-          receivedType: typeof req.body.images,
-          receivedData: req.body.images?.constructor?.name || 'unknown'
+  app.post("/api/products", async (req, res) => {
+    try {
+      console.log("📝 Dados recebidos para produto:", JSON.stringify(req.body, null, 2));
+      
+      // Validate the request body
+      const validatedData = insertProductSchema.parse(req.body);
+      console.log("✅ Dados validados:", JSON.stringify(validatedData, null, 2));
+      
+      const product = await storage.createProduct(validatedData);
+      console.log("🎉 Produto criado:", JSON.stringify(product, null, 2));
+      
+      res.status(201).json(product);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        console.log("❌ Erro de validação detalhado:");
+        error.errors.forEach((err, index) => {
+          console.log(`  ${index + 1}. Campo: ${err.path.join('.')} | Erro: ${err.message} | Valor recebido:`, err.received);
         });
-      } else {
-        console.log("⚠️ Formato de imagem não reconhecido:", typeof req.body.images);
+        return res.status(400).json({ 
+          message: "Dados inválidos", 
+          errors: error.errors,
+          details: error.errors.map(err => ({
+            field: err.path.join('.'),
+            message: err.message,
+            received: err.received
+          }))
+        });
       }
+      console.error("❌ Erro ao criar produto:", error);
+      res.status(500).json({ message: "Erro interno do servidor" });
     }
-
-    console.log("🖼️ Imagens processadas:", processedImages);
-
-    // Garantir que arrays existam
-    const cleanData = {
-      ...req.body,
-      images: processedImages,
-      colors: req.body.colors || [],
-      sizes: req.body.sizes || [],
-      price: typeof req.body.price === 'number' ? req.body.price.toString() : req.body.price,
-      stock: typeof req.body.stock === 'string' ? parseInt(req.body.stock) : req.body.stock || 0,
-      isActive: req.body.isActive !== undefined ? req.body.isActive : true
-    };
-
-    console.log("🔧 Dados limpos:", JSON.stringify(cleanData, null, 2));
-
-    const validatedData = insertProductSchema.parse(cleanData);
-    const product = await storage.createProduct(validatedData);
-    res.status(201).json(product);
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      console.log("❌ Erro de validação Zod:");
-      error.errors.forEach((err, index) => {
-        console.log(`  ${index + 1}. Campo: ${err.path.join('.')} | Erro: ${err.message} | Valor: ${err.received || 'undefined'}`);
-      });
-      return res.status(400).json({ 
-        message: "Dados inválidos", 
-        errors: error.errors,
-        receivedData: req.body 
-      });
-    }
-    console.error("❌ Erro geral:", error);
-    res.status(500).json({ message: "Erro ao criar produto", error: error.message });
-  }
-});
+  });
 
   app.patch("/api/products/:id", async (req, res) => {
     try {
-      const product = await storage.updateProduct(req.params.id, req.body);
+      console.log("📝 Atualizando produto:", req.params.id, JSON.stringify(req.body, null, 2));
+      
+      // For updates, create a partial schema that doesn't require all fields
+      const updateData = req.body;
+      
+      // If price is provided, validate and transform it
+      if (updateData.price !== undefined) {
+        if (typeof updateData.price === 'string') {
+          updateData.price = updateData.price.replace(',', '.');
+        }
+        updateData.price = updateData.price.toString();
+      }
+      
+      // If stock is provided, ensure it's a number
+      if (updateData.stock !== undefined) {
+        updateData.stock = parseInt(updateData.stock, 10);
+      }
+
+      const product = await storage.updateProduct(req.params.id, updateData);
       if (!product) {
         return res.status(404).json({ message: "Produto não encontrado" });
       }
+      
+      console.log("✅ Produto atualizado:", JSON.stringify(product, null, 2));
       res.json(product);
     } catch (error) {
+      console.error("❌ Erro ao atualizar produto:", error);
       res.status(500).json({ message: "Erro ao atualizar produto" });
     }
   });
@@ -157,6 +139,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       res.json({ message: "Produto removido com sucesso" });
     } catch (error) {
+      console.error('Delete product error:', error);
       res.status(500).json({ message: "Erro ao remover produto" });
     }
   });
@@ -176,9 +159,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           };
         })
       );
-      
+
       res.json(enrichedItems);
     } catch (error) {
+      console.error('Get cart error:', error);
       res.status(500).json({ message: "Erro ao buscar carrinho" });
     }
   });
@@ -192,6 +176,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: "Dados inválidos", errors: error.errors });
       }
+      console.error('Add to cart error:', error);
       res.status(500).json({ message: "Erro ao adicionar ao carrinho" });
     }
   });
@@ -205,6 +190,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       res.json(cartItem);
     } catch (error) {
+      console.error('Update cart error:', error);
       res.status(500).json({ message: "Erro ao atualizar item" });
     }
   });
@@ -217,6 +203,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       res.json({ message: "Item removido do carrinho" });
     } catch (error) {
+      console.error('Remove from cart error:', error);
       res.status(500).json({ message: "Erro ao remover item" });
     }
   });
@@ -226,6 +213,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.clearCart(req.params.userId);
       res.json({ message: "Carrinho limpo com sucesso" });
     } catch (error) {
+      console.error('Clear cart error:', error);
       res.status(500).json({ message: "Erro ao limpar carrinho" });
     }
   });
@@ -236,6 +224,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const orders = await storage.getOrders();
       res.json(orders);
     } catch (error) {
+      console.error('Get orders error:', error);
       res.status(500).json({ message: "Erro ao buscar pedidos" });
     }
   });
@@ -245,6 +234,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const orders = await storage.getOrdersByUser(req.params.userId);
       res.json(orders);
     } catch (error) {
+      console.error('Get user orders error:', error);
       res.status(500).json({ message: "Erro ao buscar pedidos do usuário" });
     }
   });
@@ -252,13 +242,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/orders", async (req, res) => {
     try {
       console.log("📝 Dados recebidos para pedido:", JSON.stringify(req.body, null, 2));
-      console.log("🔍 Schema esperado:", insertOrderSchema._def);
+
       const validatedData = insertOrderSchema.parse(req.body);
       const order = await storage.createOrder(validatedData);
-      
+
       // Limpar carrinho após criar pedido
       await storage.clearCart(validatedData.userId);
-      
+
       res.status(201).json(order);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -282,6 +272,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       res.json(order);
     } catch (error) {
+      console.error('Update order status error:', error);
       res.status(500).json({ message: "Erro ao atualizar status do pedido" });
     }
   });
@@ -295,6 +286,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       res.json(user);
     } catch (error) {
+      console.error('Get user error:', error);
       res.status(500).json({ message: "Erro ao buscar usuário" });
     }
   });
@@ -307,6 +299,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       res.json(user);
     } catch (error) {
+      console.error('Get user by email error:', error);
       res.status(500).json({ message: "Erro ao buscar usuário" });
     }
   });
@@ -350,15 +343,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/payment/card_issuers", async (req, res) => {
     try {
       const { payment_method_id, bin } = req.query;
-      
+
       if (!payment_method_id || !bin) {
         return res.status(400).json({ message: "payment_method_id e bin são obrigatórios" });
       }
 
       const issuers = await mercadoPagoService.getCardIssuers(
-        payment_method_id as string, 
+        payment_method_id as string,
         bin as string
       );
+
       res.json(issuers);
     } catch (error) {
       console.error('Erro ao buscar emissores:', error);
@@ -370,16 +364,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/payment/installments", async (req, res) => {
     try {
       const { payment_method_id, amount, issuer_id } = req.query;
-      
+
       if (!payment_method_id || !amount) {
         return res.status(400).json({ message: "payment_method_id e amount são obrigatórios" });
       }
 
       const installments = await mercadoPagoService.getInstallments(
-        payment_method_id as string, 
+        payment_method_id as string,
         Number(amount),
         issuer_id ? Number(issuer_id) : undefined
       );
+
       res.json(installments);
     } catch (error) {
       console.error('Erro ao buscar parcelas:', error);
@@ -448,57 +443,89 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ...(paymentMethod === 'pix' && paymentResult.point_of_interaction?.transaction_data && {
           qrCode: paymentResult.point_of_interaction.transaction_data.qr_code,
           qrCodeBase64: paymentResult.point_of_interaction.transaction_data.qr_code_base64,
+          ticketUrl: paymentResult.point_of_interaction.transaction_data.ticket_url,
         }),
       });
 
     } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: "Dados de pagamento inválidos", errors: error.errors });
-      }
       console.error('Erro no processamento:', error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({
+          message: "Dados inválidos",
+          errors: error.errors
+        });
+      }
       res.status(500).json({ message: "Erro ao processar pagamento" });
     }
   });
 
-  // Webhook do Mercado Pago
+  // Consultar status do pagamento
+  app.get("/api/payment/:paymentId/status", async (req, res) => {
+    try {
+      const { paymentId } = req.params;
+      const paymentStatus = await mercadoPagoService.getPaymentStatus(paymentId);
+
+      // Atualizar transação local
+      await storage.updateMpTransaction(paymentId, {
+        status: paymentStatus.status,
+        statusDetail: paymentStatus.status_detail,
+        transactionData: paymentStatus,
+      });
+
+      res.json({
+        id: paymentStatus.id,
+        status: paymentStatus.status,
+        statusDetail: paymentStatus.status_detail,
+        paymentMethodId: paymentStatus.payment_method_id,
+        paymentTypeId: paymentStatus.payment_type_id,
+        transactionAmount: paymentStatus.transaction_amount,
+        dateCreated: paymentStatus.date_created,
+        dateApproved: paymentStatus.date_approved,
+      });
+
+    } catch (error) {
+      console.error('Erro ao consultar pagamento:', error);
+      res.status(500).json({ message: "Erro ao consultar status do pagamento" });
+    }
+  });
+
+  // Webhook para receber notificações do Mercado Pago
   app.post("/api/payment/webhook", async (req, res) => {
     try {
-      console.log('📲 Webhook recebido:', req.body);
-      
-      if (req.body.type === 'payment') {
-        const paymentId = req.body.data.id;
-        
-        // Buscar detalhes do pagamento no MP
-        const paymentDetails = await mercadoPagoService.getPaymentDetails(paymentId);
-        
-        // Atualizar transação no banco
-        await storage.updateMpTransaction(paymentId.toString(), {
-          status: paymentDetails.status,
-          statusDetail: paymentDetails.status_detail,
-          transactionData: paymentDetails,
+      const { id, topic } = req.body;
+
+      if (topic === 'payment') {
+        // Consultar o pagamento atualizado
+        const paymentStatus = await mercadoPagoService.getPaymentStatus(id.toString());
+
+        // Atualizar transação local
+        const transaction = await storage.updateMpTransaction(id.toString(), {
+          status: paymentStatus.status,
+          statusDetail: paymentStatus.status_detail,
+          transactionData: paymentStatus,
         });
-        
-        // Atualizar status do pedido se aprovado
-        if (paymentDetails.status === 'approved') {
-          const transaction = await storage.getMpTransaction(paymentId.toString());
-          if (transaction) {
+
+        if (transaction) {
+          // Atualizar status do pedido
+          const order = await storage.getOrder(transaction.orderId);
+          if (order) {
             await storage.updateOrderPayment(
               transaction.orderId,
-              paymentId.toString(),
-              'approved'
+              id.toString(),
+              paymentStatus.status === 'approved' ? 'approved' :
+                paymentStatus.status === 'rejected' ? 'rejected' : 'pending'
             );
           }
         }
       }
-      
+
       res.status(200).json({ received: true });
     } catch (error) {
       console.error('Erro no webhook:', error);
-      res.status(500).json({ message: "Erro no webhook" });
+      res.status(500).json({ message: "Erro ao processar webhook" });
     }
   });
 
   const httpServer = createServer(app);
   return httpServer;
 }
-
