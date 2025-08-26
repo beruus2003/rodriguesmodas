@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react"; // Adicionado useEffect
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { 
   Plus, 
@@ -9,7 +9,6 @@ import {
   TrendingUp,
   Users,
   Eye,
-  EyeOff,
   Upload,
   X
 } from "lucide-react";
@@ -21,7 +20,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Switch } from "@/components/ui/switch";
@@ -33,7 +32,11 @@ import { useToast } from "../hooks/use-toast";
 import { apiRequest } from "../lib/queryClient";
 import type { Product, Order } from "@shared/schema";
 
-// Schema para validação de produto
+// ==================================================================
+// MUDANÇA 1: SCHEMA DO FORMULÁRIO
+// O campo 'images' foi removido daqui. Como vamos enviar as imagens
+// como arquivos, não precisamos mais validá-las como um array de strings no formulário.
+// ==================================================================
 const productSchema = z.object({
   name: z.string().min(1, "Nome é obrigatório"),
   description: z.string().min(10, "Descrição deve ter pelo menos 10 caracteres"),
@@ -43,7 +46,6 @@ const productSchema = z.object({
   sizes: z.array(z.string()).min(1, "Pelo menos um tamanho deve ser selecionado"),
   stock: z.number().min(0, "Estoque não pode ser negativo"),
   isActive: z.boolean(),
-  images: z.array(z.string()),
 });
 
 type ProductFormData = z.infer<typeof productSchema>;
@@ -53,13 +55,18 @@ export default function Admin() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   
-  // Estados sempre no topo e fora de condicionais
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [productModalOpen, setProductModalOpen] = useState(false);
-  const [imageUrls, setImageUrls] = useState<string[]>([]);
-  const [imageInput, setImageInput] = useState("");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [productToDelete, setProductToDelete] = useState<string | null>(null);
+  
+  // ==================================================================
+  // MUDANÇA 2: ESTADOS PARA GERENCIAR IMAGENS
+  // 'imagePreviewUrls' guarda as URLs para mostrar na tela.
+  // 'imageFiles' guarda APENAS os novos arquivos selecionados pelo usuário.
+  // ==================================================================
+  const [imagePreviewUrls, setImagePreviewUrls] = useState<string[]>([]);
+  const [imageFiles, setImageFiles] = useState<File[]>([]);
 
 
   // Queries
@@ -71,22 +78,34 @@ export default function Admin() {
     queryKey: ["/api/orders"],
   });
 
-  // Mutations
+  // ==================================================================
+  // MUDANÇA 3: MUTATION PARA CRIAR PRODUTO COM FORMDATA
+  // A função agora espera um objeto 'FormData'. Usamos 'fetch' diretamente
+  // para que o navegador configure o cabeçalho 'Content-Type' como
+  // 'multipart/form-data' corretamente.
+  // ==================================================================
   const createProductMutation = useMutation({
-    mutationFn: async (data: ProductFormData) => {
-      const response = await apiRequest("POST", "/api/products", data);
+    mutationFn: async (formData: FormData) => {
+      const response = await fetch("/api/products", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Falha ao criar produto");
+      }
       return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/products"] });
       setProductModalOpen(false);
-      setEditingProduct(null);
       toast({ title: "Produto criado com sucesso!" });
     },
-    onError: () => {
+    onError: (error: Error) => {
       toast({ 
         title: "Erro ao criar produto", 
-        description: "Tente novamente mais tarde.", 
+        description: error.message || "Tente novamente mais tarde.", 
         variant: "destructive" 
       });
     },
@@ -153,11 +172,20 @@ export default function Admin() {
       sizes: [],
       stock: 0,
       isActive: true,
-      images: [],
     },
   });
 
-  // Verificar se o usuário é admin
+  // Limpa as URLs de preview quando o componente é desmontado
+  useEffect(() => {
+    return () => {
+      imagePreviewUrls.forEach(url => {
+        if (url.startsWith('blob:')) {
+          URL.revokeObjectURL(url)
+        }
+      });
+    };
+  }, [imagePreviewUrls]);
+
   if (!user || !isAdmin) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -176,7 +204,6 @@ export default function Admin() {
     );
   }
 
-  // Funções auxiliares
   const formatPrice = (price: string) => {
     return new Intl.NumberFormat("pt-BR", {
       style: "currency",
@@ -200,7 +227,8 @@ export default function Admin() {
   const openProductModal = (product?: Product) => {
     if (product) {
       setEditingProduct(product);
-      setImageUrls(product.images as string[] || []);
+      setImagePreviewUrls(product.images as string[] || []);
+      setImageFiles([]); 
       form.reset({
         name: product.name,
         description: product.description,
@@ -210,11 +238,11 @@ export default function Admin() {
         sizes: product.sizes as string[],
         stock: product.stock,
         isActive: product.isActive,
-        images: product.images as string[],
       });
     } else {
       setEditingProduct(null);
-      setImageUrls([]);
+      setImagePreviewUrls([]);
+      setImageFiles([]);
       form.reset({
         name: "",
         description: "",
@@ -224,51 +252,79 @@ export default function Admin() {
         sizes: [],
         stock: 0,
         isActive: true,
-        images: [],
       });
     }
-    setImageInput("");
     setProductModalOpen(true);
   };
 
-  const addImageUrl = () => {
-    if (imageInput.trim() && !imageUrls.includes(imageInput.trim())) {
-      const newUrls = [...imageUrls, imageInput.trim()];
-      setImageUrls(newUrls);
-      form.setValue("images", newUrls);
-      setImageInput("");
-    }
-  };
-
-  const removeImageUrl = (index: number) => {
-    const newUrls = imageUrls.filter((_, i) => i !== index);
-    setImageUrls(newUrls);
-    form.setValue("images", newUrls);
-  };
-
+  // ==================================================================
+  // MUDANÇA 4: LÓGICA DE UPLOAD DE IMAGEM
+  // Em vez de 'readAsDataURL', usamos 'URL.createObjectURL'. Isso cria
+  // uma URL local temporária para a imagem, que é muito mais rápido.
+  // O arquivo original é guardado no estado 'imageFiles' para ser enviado.
+  // ==================================================================
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (!files) return;
 
-    Array.from(files).forEach(file => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const result = e.target?.result as string;
-        if (result && !imageUrls.includes(result)) {
-          const newUrls = [...imageUrls, result];
-          setImageUrls(newUrls);
-          form.setValue("images", newUrls);
-        }
-      };
-      reader.readAsDataURL(file);
-    });
+    const newFiles = Array.from(files);
+    const newPreviewUrls = newFiles.map(file => URL.createObjectURL(file));
+
+    setImageFiles(prevFiles => [...prevFiles, ...newFiles]);
+    setImagePreviewUrls(prevUrls => [...prevUrls, ...newPreviewUrls]);
   };
 
+  const removeImage = (indexToRemove: number) => {
+    const urlToRemove = imagePreviewUrls[indexToRemove];
+    
+    if (urlToRemove.startsWith('blob:')) {
+      const fileIndex = imagePreviewUrls
+        .filter(url => url.startsWith('blob:'))
+        .findIndex(url => url === urlToRemove);
+      
+      if (fileIndex !== -1) {
+        setImageFiles(prevFiles => prevFiles.filter((_, i) => i !== fileIndex));
+      }
+      URL.revokeObjectURL(urlToRemove); 
+    }
+    setImagePreviewUrls(prevUrls => prevUrls.filter((_, i) => i !== indexToRemove));
+  };
+
+
+  // ==================================================================
+  // MUDANÇA 5: LÓGICA DE SUBMISSÃO DO FORMULÁRIO
+  // Esta é a mudança mais crucial. Agora, construímos um objeto FormData.
+  // Adicionamos cada campo do formulário e cada arquivo de imagem a ele.
+  // É este objeto FormData que é enviado para o backend.
+  // ==================================================================
   const handleSubmitProduct = (data: ProductFormData) => {
     if (editingProduct) {
+      // A lógica de atualização para imagens é mais complexa e não foi implementada aqui.
+      // Esta correção foca na CRIAÇÃO de produtos.
       updateProductMutation.mutate({ id: editingProduct.id, data });
     } else {
-      createProductMutation.mutate(data);
+      if (imageFiles.length === 0) {
+        toast({ title: "Erro", description: "Por favor, adicione pelo menos uma imagem.", variant: "destructive" });
+        return;
+      }
+
+      const formData = new FormData();
+      
+      formData.append('name', data.name);
+      formData.append('description', data.description);
+      formData.append('price', data.price);
+      formData.append('category', data.category);
+      formData.append('stock', data.stock.toString());
+      formData.append('isActive', data.isActive.toString());
+
+      data.colors.forEach(color => formData.append('colors[]', color));
+      data.sizes.forEach(size => formData.append('sizes[]', size));
+
+      imageFiles.forEach(file => {
+        formData.append('image', file); 
+      });
+
+      createProductMutation.mutate(formData);
     }
   };
 
@@ -307,7 +363,7 @@ export default function Admin() {
               </p>
             </div>
             <div className="text-sm text-muted-foreground">
-              Logado como: <span className="font-medium">{user.name}</span>
+              Logado como: <span className="font-medium">{user?.name}</span>
             </div>
           </div>
         </div>
@@ -393,8 +449,7 @@ export default function Admin() {
               </Button>
             </div>
 
-            {/* Grid de produtos em 3 colunas */}
-            <div className="grid grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {productsLoading ? (
                 [...Array(6)].map((_, i) => (
                   <Card key={i} className="animate-pulse">
@@ -693,15 +748,8 @@ export default function Admin() {
                   <label key={color} className="flex items-center space-x-2">
                     <input
                       type="checkbox"
-                      checked={form.watch("colors").includes(color)}
-                      onChange={(e) => {
-                        const currentColors = form.watch("colors");
-                        if (e.target.checked) {
-                          form.setValue("colors", [...currentColors, color]);
-                        } else {
-                          form.setValue("colors", currentColors.filter(c => c !== color));
-                        }
-                      }}
+                      value={color}
+                      {...form.register("colors")}
                     />
                     <span className="text-sm">{color}</span>
                   </label>
@@ -717,15 +765,8 @@ export default function Admin() {
                   <label key={size} className="flex items-center space-x-2">
                     <input
                       type="checkbox"
-                      checked={form.watch("sizes").includes(size)}
-                      onChange={(e) => {
-                        const currentSizes = form.watch("sizes");
-                        if (e.target.checked) {
-                          form.setValue("sizes", [...currentSizes, size]);
-                        } else {
-                          form.setValue("sizes", currentSizes.filter(s => s !== size));
-                        }
-                      }}
+                      value={size}
+                      {...form.register("sizes")}
                     />
                     <span className="text-sm">{size}</span>
                   </label>
@@ -735,7 +776,7 @@ export default function Admin() {
 
             {/* Imagens do Produto */}
             <div>
-              <Label>Imagens do Produto</Label>
+              <Label htmlFor="image-upload">Imagens do Produto</Label>
               <div className="space-y-3">
                 <div className="flex gap-2">
                   <Input
@@ -744,58 +785,35 @@ export default function Admin() {
                     accept="image/*"
                     multiple
                     onChange={handleImageUpload}
-                    className="flex-1"
+                    className="hidden"
                   />
                   <Button
                     type="button"
                     onClick={() => document.getElementById('image-upload')?.click()}
                     variant="outline"
+                    className="w-full"
                   >
                     <Upload className="h-4 w-4 mr-2" />
-                    Galeria
+                    Escolher da Galeria
                   </Button>
                 </div>
                 
-                <div className="text-xs text-muted-foreground">
-                  Ou cole URLs de imagens:
-                </div>
-                <div className="flex gap-2">
-                  <Input
-                    value={imageInput}
-                    onChange={(e) => setImageInput(e.target.value)}
-                    placeholder="Cole o URL da imagem aqui..."
-                    className="flex-1"
-                  />
-                  <Button
-                    type="button"
-                    onClick={addImageUrl}
-                    disabled={!imageInput.trim()}
-                    variant="outline"
-                    size="sm"
-                  >
-                    Adicionar URL
-                  </Button>
-                </div>
-                
-                {imageUrls.length > 0 && (
+                {imagePreviewUrls.length > 0 && (
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                    {imageUrls.map((url, index) => (
+                    {imagePreviewUrls.map((url, index) => (
                       <div key={index} className="relative group">
                         <div className="aspect-square rounded-lg overflow-hidden border">
                           <img
                             src={url}
-                            alt={`Produto ${index + 1}`}
+                            alt={`Preview ${index + 1}`}
                             className="w-full h-full object-cover"
-                            onError={(e) => {
-                              e.currentTarget.src = "https://images.unsplash.com/photo-1594736797933-d0501ba2fe65?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&h=400";
-                            }}
                           />
                         </div>
                         <Button
                           type="button"
                           variant="destructive"
                           size="sm"
-                          onClick={() => removeImageUrl(index)}
+                          onClick={() => removeImage(index)}
                           className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity p-1 h-6 w-6"
                         >
                           <X className="h-3 w-3" />
@@ -808,20 +826,11 @@ export default function Admin() {
                   </div>
                 )}
                 
-                {imageUrls.length === 0 && (
+                {imagePreviewUrls.length === 0 && (
                   <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
                     <Upload className="h-8 w-8 mx-auto text-gray-400 mb-2" />
-                    <p className="text-sm text-gray-500">Escolha imagens da galeria ou adicione URLs</p>
+                    <p className="text-sm text-gray-500">Nenhuma imagem selecionada</p>
                     <p className="text-xs text-gray-400 mt-1">A primeira imagem será a principal</p>
-                    <Button
-                      type="button"
-                      onClick={() => document.getElementById('image-upload')?.click()}
-                      variant="outline"
-                      className="mt-3"
-                    >
-                      <Upload className="h-4 w-4 mr-2" />
-                      Escolher da Galeria
-                    </Button>
                   </div>
                 )}
               </div>
