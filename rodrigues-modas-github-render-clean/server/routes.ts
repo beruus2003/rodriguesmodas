@@ -4,44 +4,33 @@ import { storage } from "./storage";
 import { insertProductSchema, insertOrderSchema, insertCartItemSchema, insertMpTransactionSchema } from "@shared/schema";
 import { z } from "zod";
 import { mercadoPagoService, type PaymentData } from "./mercadopago";
-
-// ==================================================================
-// MUDANÇA 1: IMPORTAÇÕES NECESSÁRIAS PARA O UPLOAD
-// Importamos o 'multer' para processar uploads, 'path' para lidar
-// com caminhos de arquivos e 'fs' para interagir com o sistema de arquivos.
-// ==================================================================
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import { fileURLToPath } from 'url'; // <-- MUDANÇA AQUI
+
+// Esta parte "recria" o __dirname da forma moderna, corrigindo o erro
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 export async function registerRoutes(app: Express): Promise<Server> {
 
-  // ==================================================================
-  // MUDANÇA 2: CONFIGURAÇÃO DO MULTER
-  // Esta seção configura como e onde o multer vai salvar as imagens.
-  // ==================================================================
-  
-  // Garante que o diretório de uploads exista. Se não existir, ele é criado.
-  // path.resolve garante um caminho absoluto e seguro.
+  // A configuração do multer agora usa o __dirname corrigido
   const uploadDir = path.resolve(__dirname, '..', 'uploads');
   if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir, { recursive: true });
   }
 
-  // Define a estratégia de armazenamento: salvar em disco.
   const multerStorage = multer.diskStorage({
     destination: (req, file, cb) => {
-      cb(null, uploadDir); // Informa que os arquivos devem ser salvos na pasta 'uploads'
+      cb(null, uploadDir);
     },
     filename: (req, file, cb) => {
-      // Cria um nome de arquivo único para evitar que uma imagem sobrescreva outra.
-      // Ex: image-1678886400000-123456789.jpg
       const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
       cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
     },
   });
 
-  // Inicializa o multer com a configuração de armazenamento.
   const upload = multer({ storage: multerStorage });
 
 
@@ -101,40 +90,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // ==================================================================
-  // MUDANÇA 3: ROTA DE CRIAÇÃO DE PRODUTO ATUALIZADA
-  // Esta é a rota principal que foi corrigida.
-  // ==================================================================
   app.post("/api/products", upload.array('image', 10), async (req, res) => {
-    // 1. `upload.array('image', 10)`: Usa o multer para processar até 10 arquivos
-    //    que venham no campo 'image' do FormData.
     try {
-      // 2. `req.files`: Após o multer rodar, os arquivos estarão disponíveis em `req.files`.
-      //    Os campos de texto (nome, preço, etc.) continuam em `req.body`.
       const files = req.files as Express.Multer.File[];
       
       if (!files || files.length === 0) {
         return res.status(400).json({ message: "Pelo menos uma imagem é necessária." });
       }
 
-      // 3. Mapeia os arquivos salvos para suas URLs públicas que o frontend pode usar.
       const imageUrls = files.map(file => `/uploads/${file.filename}`);
 
-      // 4. Monta o objeto de dados do produto.
-      //    Dados de FormData chegam como strings, então precisamos convertê-los
-      //    para os tipos corretos (número, booleano, array) antes de validar.
       const productData = {
         ...req.body,
         price: req.body.price.toString().replace(',', '.'),
         stock: parseInt(req.body.stock, 10),
         isActive: req.body.isActive === 'true',
-        // Garante que cores e tamanhos sejam sempre arrays, mesmo que só venha um valor.
         colors: Array.isArray(req.body['colors[]']) ? req.body['colors[]'] : [req.body['colors[]']],
         sizes: Array.isArray(req.body['sizes[]']) ? req.body['sizes[]'] : [req.body['sizes[]']],
-        images: imageUrls, // Salva o array de URLs das imagens.
+        images: imageUrls,
       };
 
-      // 5. Valida os dados já formatados com o Zod.
       const validatedData = insertProductSchema.parse(productData);
       const product = await storage.createProduct(validatedData);
 
