@@ -2,6 +2,11 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import path from "path";
+import { fileURLToPath } from 'url'; // <-- MUDANÇA AQUI
+
+// Esta parte "recria" o __dirname da forma moderna
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 app.use(express.json());
@@ -10,13 +15,8 @@ app.use(express.urlencoded({ extended: false }));
 // Serve static assets from attached_assets
 app.use('/assets', express.static(path.join(process.cwd(), 'attached_assets')));
 
-// ==================================================================
-// >> LINHA ADICIONADA AQUI <<
-// Esta linha torna a pasta 'uploads' (que o multer vai criar na raiz do projeto)
-// publicamente acessível através da URL '/uploads'. É isso que permite
-// que o navegador exiba as imagens dos produtos que você cadastrar.
+// A linha abaixo agora funciona por causa da correção acima
 app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
-// ==================================================================
 
 app.use((req, res, next) => {
   const start = Date.now();
@@ -59,19 +59,12 @@ app.use((req, res, next) => {
     throw err;
   });
 
-  // importantly only setup vite in development and after
-  // setting up all the other routes so the catch-all route
-  // doesn't interfere with the other routes
   if (app.get("env") === "development") {
     await setupVite(app, server);
   } else {
     serveStatic(app);
   }
 
-  // ALWAYS serve the app on the port specified in the environment variable PORT
-  // Other ports are firewalled. Default to 5000 if not specified.
-  // this serves both the API and the client.
-  // It is the only port that is not firewalled.
   const port = parseInt(process.env.PORT || '5000', 10);
   server.listen({
     port,
