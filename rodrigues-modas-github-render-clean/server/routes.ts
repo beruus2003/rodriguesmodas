@@ -5,14 +5,51 @@ import { insertProductSchema, insertOrderSchema, insertCartItemSchema, insertMpT
 import { z } from "zod";
 import { mercadoPagoService, type PaymentData } from "./mercadopago";
 
+// ==================================================================
+// MUDANÇA 1: IMPORTAÇÕES NECESSÁRIAS PARA O UPLOAD
+// Importamos o 'multer' para processar uploads, 'path' para lidar
+// com caminhos de arquivos e 'fs' para interagir com o sistema de arquivos.
+// ==================================================================
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
+
 export async function registerRoutes(app: Express): Promise<Server> {
+
+  // ==================================================================
+  // MUDANÇA 2: CONFIGURAÇÃO DO MULTER
+  // Esta seção configura como e onde o multer vai salvar as imagens.
+  // ==================================================================
+  
+  // Garante que o diretório de uploads exista. Se não existir, ele é criado.
+  // path.resolve garante um caminho absoluto e seguro.
+  const uploadDir = path.resolve(__dirname, '..', 'uploads');
+  if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+  }
+
+  // Define a estratégia de armazenamento: salvar em disco.
+  const multerStorage = multer.diskStorage({
+    destination: (req, file, cb) => {
+      cb(null, uploadDir); // Informa que os arquivos devem ser salvos na pasta 'uploads'
+    },
+    filename: (req, file, cb) => {
+      // Cria um nome de arquivo único para evitar que uma imagem sobrescreva outra.
+      // Ex: image-1678886400000-123456789.jpg
+      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+      cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
+    },
+  });
+
+  // Inicializa o multer com a configuração de armazenamento.
+  const upload = multer({ storage: multerStorage });
+
 
   // Autenticação - Login seguro no backend
   app.post("/api/auth/login", async (req, res) => {
     try {
       const { email, password } = req.body;
 
-      // Credenciais seguras no backend
       if ((email === "Camila567" || email === "camila567") && password === "Marialuiza0510") {
         const authUser = {
           id: "admin-camila",
@@ -25,7 +62,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.json({ success: true, user: authUser });
       }
 
-      // Login inválido
       res.status(401).json({ success: false, message: "Credenciais inválidas" });
     } catch (error) {
       console.error('Auth error:', error);
@@ -65,42 +101,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
- app.post("/api/products", async (req, res) => {
-  try {
-    console.log("📝 Dados recebidos para produto:", JSON.stringify(req.body, null, 2));
+  // ==================================================================
+  // MUDANÇA 3: ROTA DE CRIAÇÃO DE PRODUTO ATUALIZADA
+  // Esta é a rota principal que foi corrigida.
+  // ==================================================================
+  app.post("/api/products", upload.array('image', 10), async (req, res) => {
+    // 1. `upload.array('image', 10)`: Usa o multer para processar até 10 arquivos
+    //    que venham no campo 'image' do FormData.
+    try {
+      // 2. `req.files`: Após o multer rodar, os arquivos estarão disponíveis em `req.files`.
+      //    Os campos de texto (nome, preço, etc.) continuam em `req.body`.
+      const files = req.files as Express.Multer.File[];
+      
+      if (!files || files.length === 0) {
+        return res.status(400).json({ message: "Pelo menos uma imagem é necessária." });
+      }
 
-    // Se o frontend enviar imagem como base64 ou File, ajustar antes da validação
-    let productData = { ...req.body };
+      // 3. Mapeia os arquivos salvos para suas URLs públicas que o frontend pode usar.
+      const imageUrls = files.map(file => `/uploads/${file.filename}`);
 
-    if (productData.image && typeof productData.image !== "string") {
-      console.log("📷 Convertendo imagem recebida...");
-      // Aqui você pode salvar em disco ou converter para base64
-      // Exemplo simples: transformar objeto em string JSON
-      productData.image = JSON.stringify(productData.image);
-    }
+      // 4. Monta o objeto de dados do produto.
+      //    Dados de FormData chegam como strings, então precisamos convertê-los
+      //    para os tipos corretos (número, booleano, array) antes de validar.
+      const productData = {
+        ...req.body,
+        price: req.body.price.toString().replace(',', '.'),
+        stock: parseInt(req.body.stock, 10),
+        isActive: req.body.isActive === 'true',
+        // Garante que cores e tamanhos sejam sempre arrays, mesmo que só venha um valor.
+        colors: Array.isArray(req.body['colors[]']) ? req.body['colors[]'] : [req.body['colors[]']],
+        sizes: Array.isArray(req.body['sizes[]']) ? req.body['sizes[]'] : [req.body['sizes[]']],
+        images: imageUrls, // Salva o array de URLs das imagens.
+      };
 
-    // Validar os dados
-    const validatedData = insertProductSchema.parse(productData);
-    console.log("✅ Dados validados:", JSON.stringify(validatedData, null, 2));
+      // 5. Valida os dados já formatados com o Zod.
+      const validatedData = insertProductSchema.parse(productData);
+      const product = await storage.createProduct(validatedData);
 
-    const product = await storage.createProduct(validatedData);
-    console.log("🎉 Produto criado:", JSON.stringify(product, null, 2));
-
-    res.status(201).json(product);
+      res.status(201).json(product);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        console.log("❌ Erro de validação detalhado:");
-        error.errors.forEach((err, index) => {
-          console.log(`  ${index + 1}. Campo: ${err.path.join('.')} | Erro: ${err.message} | Valor recebido:`, err.received);
-        });
-        return res.status(400).json({ 
-          message: "Dados inválidos", 
-          errors: error.errors,
-          details: error.errors.map(err => ({
-            field: err.path.join('.'),
-            message: err.message,
-            received: err.received
-          }))
+        console.error("❌ Erro de validação Zod:", error.flatten());
+        return res.status(400).json({
+          message: "Dados inválidos",
+          errors: error.flatten().fieldErrors,
         });
       }
       console.error("❌ Erro ao criar produto:", error);
@@ -108,14 +152,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+
   app.patch("/api/products/:id", async (req, res) => {
     try {
       console.log("📝 Atualizando produto:", req.params.id, JSON.stringify(req.body, null, 2));
       
-      // For updates, create a partial schema that doesn't require all fields
       const updateData = req.body;
       
-      // If price is provided, validate and transform it
       if (updateData.price !== undefined) {
         if (typeof updateData.price === 'string') {
           updateData.price = updateData.price.replace(',', '.');
@@ -123,7 +166,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         updateData.price = updateData.price.toString();
       }
       
-      // If stock is provided, ensure it's a number
       if (updateData.stock !== undefined) {
         updateData.stock = parseInt(updateData.stock, 10);
       }
@@ -159,7 +201,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const cartItems = await storage.getCartItems(req.params.userId);
       
-      // Enriquecer com dados do produto
       const enrichedItems = await Promise.all(
         cartItems.map(async (item) => {
           const product = await storage.getProduct(item.productId);
@@ -256,7 +297,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const validatedData = insertOrderSchema.parse(req.body);
       const order = await storage.createOrder(validatedData);
 
-      // Limpar carrinho após criar pedido
       await storage.clearCart(validatedData.userId);
 
       res.status(201).json(order);
@@ -315,8 +355,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ==================== MERCADO PAGO ROUTES ====================
-
-  // Schema para validação de pagamento
+  
   const paymentSchema = z.object({
     orderId: z.string(),
     paymentMethod: z.enum(['credit_card', 'debit_card', 'pix']),
@@ -338,7 +377,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }).optional(),
   });
 
-  // Obter métodos de pagamento
   app.get("/api/payment/methods", async (req, res) => {
     try {
       const methods = await mercadoPagoService.getPaymentMethods();
@@ -349,7 +387,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Obter emissores de cartão
   app.get("/api/payment/card_issuers", async (req, res) => {
     try {
       const { payment_method_id, bin } = req.query;
@@ -370,7 +407,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Obter parcelas disponíveis
   app.get("/api/payment/installments", async (req, res) => {
     try {
       const { payment_method_id, amount, issuer_id } = req.query;
@@ -392,19 +428,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Processar pagamento
   app.post("/api/payment/process", async (req, res) => {
     try {
       const validatedData = paymentSchema.parse(req.body);
       const { orderId, paymentMethod, amount, payer, cardData } = validatedData;
 
-      // Verificar se o pedido existe
       const order = await storage.getOrder(orderId);
       if (!order) {
         return res.status(404).json({ message: "Pedido não encontrado" });
       }
 
-      // Preparar dados de pagamento
       const paymentData: PaymentData = {
         amount,
         email: payer.email,
@@ -416,7 +449,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       let paymentResult;
 
-      // Processar pagamento baseado no método
       if (paymentMethod === 'pix') {
         paymentResult = await mercadoPagoService.processPixPayment(paymentData);
       } else {
@@ -426,7 +458,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         paymentResult = await mercadoPagoService.processCardPayment(paymentData);
       }
 
-      // Salvar transação
       const transaction = await storage.createMpTransaction({
         orderId,
         paymentId: paymentResult.id.toString(),
@@ -438,7 +469,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         transactionData: paymentResult,
       });
 
-      // Atualizar pedido com informações de pagamento
       await storage.updateOrderPayment(
         orderId,
         paymentResult.id.toString(),
@@ -469,13 +499,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Consultar status do pagamento
   app.get("/api/payment/:paymentId/status", async (req, res) => {
     try {
       const { paymentId } = req.params;
       const paymentStatus = await mercadoPagoService.getPaymentStatus(paymentId);
 
-      // Atualizar transação local
       await storage.updateMpTransaction(paymentId, {
         status: paymentStatus.status,
         statusDetail: paymentStatus.status_detail,
@@ -499,16 +527,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Webhook para receber notificações do Mercado Pago
   app.post("/api/payment/webhook", async (req, res) => {
     try {
       const { id, topic } = req.body;
 
       if (topic === 'payment') {
-        // Consultar o pagamento atualizado
         const paymentStatus = await mercadoPagoService.getPaymentStatus(id.toString());
 
-        // Atualizar transação local
         const transaction = await storage.updateMpTransaction(id.toString(), {
           status: paymentStatus.status,
           statusDetail: paymentStatus.status_detail,
@@ -516,7 +541,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
 
         if (transaction) {
-          // Atualizar status do pedido
           const order = await storage.getOrder(transaction.orderId);
           if (order) {
             await storage.updateOrderPayment(
