@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"; // Adicionado useEffect
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { 
   Plus, 
@@ -32,11 +32,8 @@ import { useToast } from "../hooks/use-toast";
 import { apiRequest } from "../lib/queryClient";
 import type { Product, Order } from "@shared/schema";
 
-// ==================================================================
-// MUDANÇA 1: SCHEMA DO FORMULÁRIO
 // O campo 'images' foi removido daqui. Como vamos enviar as imagens
-// como arquivos, não precisamos mais validá-las como um array de strings no formulário.
-// ==================================================================
+// como arquivos, não precisamos mais validá-las no formulário.
 const productSchema = z.object({
   name: z.string().min(1, "Nome é obrigatório"),
   description: z.string().min(10, "Descrição deve ter pelo menos 10 caracteres"),
@@ -60,11 +57,7 @@ export default function Admin() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [productToDelete, setProductToDelete] = useState<string | null>(null);
   
-  // ==================================================================
-  // MUDANÇA 2: ESTADOS PARA GERENCIAR IMAGENS
-  // 'imagePreviewUrls' guarda as URLs para mostrar na tela.
-  // 'imageFiles' guarda APENAS os novos arquivos selecionados pelo usuário.
-  // ==================================================================
+  // Estados para gerenciar as imagens
   const [imagePreviewUrls, setImagePreviewUrls] = useState<string[]>([]);
   const [imageFiles, setImageFiles] = useState<File[]>([]);
 
@@ -78,12 +71,7 @@ export default function Admin() {
     queryKey: ["/api/orders"],
   });
 
-  // ==================================================================
-  // MUDANÇA 3: MUTATION PARA CRIAR PRODUTO COM FORMDATA
-  // A função agora espera um objeto 'FormData'. Usamos 'fetch' diretamente
-  // para que o navegador configure o cabeçalho 'Content-Type' como
-  // 'multipart/form-data' corretamente.
-  // ==================================================================
+  // Mutation para criar produto com FormData
   const createProductMutation = useMutation({
     mutationFn: async (formData: FormData) => {
       const response = await fetch("/api/products", {
@@ -175,7 +163,6 @@ export default function Admin() {
     },
   });
 
-  // Limpa as URLs de preview quando o componente é desmontado
   useEffect(() => {
     return () => {
       imagePreviewUrls.forEach(url => {
@@ -257,12 +244,6 @@ export default function Admin() {
     setProductModalOpen(true);
   };
 
-  // ==================================================================
-  // MUDANÇA 4: LÓGICA DE UPLOAD DE IMAGEM
-  // Em vez de 'readAsDataURL', usamos 'URL.createObjectURL'. Isso cria
-  // uma URL local temporária para a imagem, que é muito mais rápido.
-  // O arquivo original é guardado no estado 'imageFiles' para ser enviado.
-  // ==================================================================
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (!files) return;
@@ -290,17 +271,8 @@ export default function Admin() {
     setImagePreviewUrls(prevUrls => prevUrls.filter((_, i) => i !== indexToRemove));
   };
 
-
-  // ==================================================================
-  // MUDANÇA 5: LÓGICA DE SUBMISSÃO DO FORMULÁRIO
-  // Esta é a mudança mais crucial. Agora, construímos um objeto FormData.
-  // Adicionamos cada campo do formulário e cada arquivo de imagem a ele.
-  // É este objeto FormData que é enviado para o backend.
-  // ==================================================================
   const handleSubmitProduct = (data: ProductFormData) => {
     if (editingProduct) {
-      // A lógica de atualização para imagens é mais complexa e não foi implementada aqui.
-      // Esta correção foca na CRIAÇÃO de produtos.
       updateProductMutation.mutate({ id: editingProduct.id, data });
     } else {
       if (imageFiles.length === 0) {
@@ -883,5 +855,4 @@ export default function Admin() {
         </AlertDialogContent>
       </AlertDialog>
     </div>
-  );
-}
+  )
