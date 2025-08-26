@@ -10,6 +10,14 @@ app.use(express.urlencoded({ extended: false }));
 // Serve static assets from attached_assets
 app.use('/assets', express.static(path.join(process.cwd(), 'attached_assets')));
 
+// ==================================================================
+// >> LINHA ADICIONADA AQUI <<
+// Esta linha torna a pasta 'uploads' (que o multer vai criar na raiz do projeto)
+// publicamente acessível através da URL '/uploads'. É isso que permite
+// que o navegador exiba as imagens dos produtos que você cadastrar.
+app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
+// ==================================================================
+
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
