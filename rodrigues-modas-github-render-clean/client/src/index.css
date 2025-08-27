@@ -53,6 +53,16 @@
 }
 
 @layer base {
+  /* ======================================================= */
+  /* >> A CORREÇÃO (PLANO B) ESTÁ AQUI << */
+  /* Aplicamos a regra não só a 'html' e 'body', mas também */
+  /* ao container principal da aplicação ('#root'). Isso força */
+  /* todos os elementos a ficarem contidos na largura da tela. */
+  /* ======================================================= */
+  html, body, #root {
+    @apply w-full overflow-x-hidden;
+  }
+
   * {
     @apply border-border;
   }
