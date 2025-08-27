@@ -62,10 +62,10 @@ export default function Home() {
             <div className="relative animate-slide-up">
               <div className="relative z-10">
                 <img
-                  src="/assets/IMG_1427_1754846639999.png.PNG"
-                  alt="Coleção de lingerie elegante"
-                  className="rounded-xl shadow-2xl w-full h-auto"
-                />
+  src="/banner.png"
+  alt="Coleção de lingerie elegante"
+  className="rounded-xl shadow-2xl w-full h-auto"
+/>
               </div>
               {/* Decorative elements */}
               <div className="absolute -top-4 -right-4 w-24 h-24 bg-accent/20 rounded-full blur-xl"></div>
