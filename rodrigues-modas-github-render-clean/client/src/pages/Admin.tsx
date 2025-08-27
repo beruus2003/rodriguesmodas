@@ -716,7 +716,7 @@ export default function Admin() {
             <div>
               <Label>Cores Disponíveis</Label>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-2">
-                {["Branco", "Preto", "Rosa", "Azul", "Cinza", "Vermelho", "Roxo", "Champagne"].map((color) => (
+                {["Branco", "Preto", "Rosa", "Azul", "Cinza", "Vermelho", "Roxo", "Champagne", "Lilás", "Vinho", "Azul Bebê", "Verde Militar", "Salmão Escuro", "Bege", "Azul Marinho", "Salmão Claro", "Amarelo", "Marrom"].map((color) => (
                   <label key={color} className="flex items-center space-x-2">
                     <input
                       type="checkbox"
