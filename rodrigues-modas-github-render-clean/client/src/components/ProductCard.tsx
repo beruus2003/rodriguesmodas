@@ -11,6 +11,37 @@ interface ProductCardProps {
   product: Product;
 }
 
+// Mapeamento de nomes de cores para seus códigos hexadecimais
+const colorMap: { [key: string]: string } = {
+  branco: "#ffffff",
+  preto: "#000000",
+  rosa: "#ffc0cb",
+  azul: "#87ceeb",
+  cinza: "#d3d3d3",
+  vermelho: "#ff6b6b",
+  roxo: "#dda0dd",
+  champagne: "#f7e7ce",
+  // Novas cores adicionadas
+  "lilás": "#C8A2C8",
+  "vinho": "#722F37",
+  "azul bebê": "#89CFF0",
+  "verde militar": "#556B2F",
+  "salmão escuro": "#E9967A",
+  "bege": "#F5F5DC",
+  "azul marinho": "#000080",
+  "salmão claro": "#FFA07A",
+  "amarelo": "#FFFF00",
+  "marrom": "#A52A2A",
+};
+
+// Função para obter a cor de fundo com base no nome
+const getBackgroundColor = (colorName: string) => {
+  // Converte o nome da cor para minúsculas e busca no mapa
+  // Se não encontrar, retorna uma cor padrão
+  return colorMap[colorName.toLowerCase()] || "#f0f0f0";
+};
+
+
 export function ProductCard({ product }: ProductCardProps) {
   const [selectedColor, setSelectedColor] = useState(product.colors?.[0] || "");
   const [selectedSize, setSelectedSize] = useState(product.sizes?.[0] || "");
@@ -127,14 +158,7 @@ export function ProductCard({ product }: ProductCardProps) {
                     : "border-gray-300 hover:border-accent/50"
                 }`}
                 style={{
-                  backgroundColor: color.toLowerCase() === "branco" ? "#ffffff" :
-                                 color.toLowerCase() === "preto" ? "#000000" :
-                                 color.toLowerCase() === "rosa" ? "#ffc0cb" :
-                                 color.toLowerCase() === "azul" ? "#87ceeb" :
-                                 color.toLowerCase() === "cinza" ? "#d3d3d3" :
-                                 color.toLowerCase() === "vermelho" ? "#ff6b6b" :
-                                 color.toLowerCase() === "roxo" ? "#dda0dd" :
-                                 color.toLowerCase() === "champagne" ? "#f7e7ce" : "#f0f0f0"
+                  backgroundColor: getBackgroundColor(color)
                 }}
                 title={color}
               />
