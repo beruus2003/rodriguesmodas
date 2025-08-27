@@ -2,9 +2,9 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import path from "path";
-import { fileURLToPath } from 'url'; // <-- MUDANÇA AQUI
+import { fileURLToPath } from 'url';
 
-// Esta parte "recria" o __dirname da forma moderna
+// Esta parte "recria" o __dirname da forma moderna, corrigindo o erro
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
