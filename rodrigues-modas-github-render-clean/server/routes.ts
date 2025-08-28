@@ -71,7 +71,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       res.json(products);
-    } catch (error)      console.error('Get products error:', error);
+    } catch (error) { // <-- A CHAVE { FALTANTE FOI ADICIONADA AQUI
+      console.error('Get products error:', error);
       res.status(500).json({ message: "Erro ao buscar produtos" });
     }
   });
@@ -99,8 +100,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const imageUrls = files.map(file => `/uploads/${file.filename}`);
 
-      // ======================= CÓDIGO CORRIGIDO E MAIS SEGURO =======================
-      // Construímos o objeto explicitamente para garantir a integridade dos dados
       const productData = {
         name: req.body.name,
         description: req.body.description,
@@ -119,7 +118,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           
         images: imageUrls,
       };
-      // ======================= FIM DA CORREÇÃO =======================
 
       const validatedData = insertProductSchema.parse(productData);
       const product = await storage.createProduct(validatedData);
@@ -181,9 +179,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Erro ao remover produto" });
     }
   });
-
-  // RESTANTE DO CÓDIGO (Carrinho, Pedidos, etc.) CONTINUA IGUAL...
-  // ... (o resto do seu arquivo vem aqui, sem nenhuma alteração)
   
   // Carrinho
   app.get("/api/cart/:userId", async (req, res) => {
