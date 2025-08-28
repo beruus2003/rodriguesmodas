@@ -37,11 +37,14 @@ export default function Products() {
   // Filtros e busca
   const filteredAndSortedProducts = products
     .filter(product => {
-      const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           product.description.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesCategory = selectedCategory === "all" || product.category === selectedCategory;
-      return matchesSearch && matchesCategory && product.isActive;
-    })
+  // ADICIONE ESTA LINHA DE VERIFICAÇÃO NO COMEÇO
+  if (!product) return false; 
+
+  const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                        product.description.toLowerCase().includes(searchTerm.toLowerCase());
+  const matchesCategory = selectedCategory === "all" || product.category === selectedCategory;
+  return matchesSearch && matchesCategory && product.isActive;
+})
     .sort((a, b) => {
       switch (sortBy) {
         case "name":
