@@ -7,7 +7,7 @@ import { mercadoPagoService, type PaymentData } from "./mercadopago";
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
-import { fileURLToPath } from 'url'; // <-- MUDANÇA AQUI
+import { fileURLToPath } from 'url';
 
 // Esta parte "recria" o __dirname da forma moderna, corrigindo o erro
 const __filename = fileURLToPath(import.meta.url);
@@ -100,15 +100,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const imageUrls = files.map(file => `/uploads/${file.filename}`);
 
+      // ======================= CÓDIGO CORRIGIDO ABAIXO =======================
       const productData = {
         ...req.body,
         price: req.body.price.toString().replace(',', '.'),
         stock: parseInt(req.body.stock, 10),
         isActive: req.body.isActive === 'true',
-        colors: Array.isArray(req.body['colors[]']) ? req.body['colors[]'] : [req.body['colors[]']],
-        sizes: Array.isArray(req.body['sizes[]']) ? req.body['sizes[]'] : [req.body['sizes[]']],
+        
+        // LÓGICA CORRIGIDA AQUI
+        colors: req.body['colors[]'] 
+          ? (Array.isArray(req.body['colors[]']) ? req.body['colors[]'] : [req.body['colors[]']]) 
+          : [], // Se não vier nada, cria um array vazio
+
+        sizes: req.body['sizes[]'] 
+          ? (Array.isArray(req.body['sizes[]']) ? req.body['sizes[]'] : [req.body['sizes[]']]) 
+          : [], // Se não vier nada, cria um array vazio
+          
         images: imageUrls,
       };
+      // ======================= FIM DA CORREÇÃO =======================
 
       const validatedData = insertProductSchema.parse(productData);
       const product = await storage.createProduct(validatedData);
