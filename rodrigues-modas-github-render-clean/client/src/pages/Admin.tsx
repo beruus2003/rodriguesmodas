@@ -271,11 +271,7 @@ export default function Admin() {
   // ======================= ALTERAÇÃO FEITA AQUI =======================
   const handleSubmitProduct = (data: ProductFormData) => {
     // Nosso "espião" para ver os dados do formulário ANTES de serem enviados
-    alert(JSON.stringify(data, null, 2));
-
-    // A linha abaixo impede que o formulário seja realmente enviado.
-    // REMOVA esta linha quando terminarmos de depurar.
-    return; 
+    
     
     // O código original continua abaixo, mas não será executado por enquanto.
     if (editingProduct) {
