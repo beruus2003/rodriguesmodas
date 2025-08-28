@@ -11,6 +11,7 @@ interface ProductCardProps {
   product: Product;
 }
 
+// ======================= ALTERAÇÃO FEITA AQUI =======================
 // Mapeamento de nomes de cores para seus códigos hexadecimais
 const colorMap: { [key: string]: string } = {
   branco: "#ffffff",
@@ -27,12 +28,13 @@ const colorMap: { [key: string]: string } = {
   "azul bebê": "#89CFF0",
   "verde militar": "#556B2F",
   "salmão escuro": "#E9967A",
-  "bege": "#F5F5DC",
+  "bege": "#D2B48C",         // <-- CORRIGIDO
   "azul marinho": "#000080",
   "salmão claro": "#FFA07A",
   "amarelo": "#FFFF00",
-  "marrom": "#A52A2A",
+  "marrom": "#653F25",       // <-- CORRIGIDO
 };
+// ======================= FIM DA ALTERAÇÃO =======================
 
 // Função para obter a cor de fundo com base no nome
 const getBackgroundColor = (colorName: string) => {
