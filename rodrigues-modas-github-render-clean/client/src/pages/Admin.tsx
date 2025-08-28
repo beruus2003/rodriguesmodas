@@ -32,8 +32,6 @@ import { useToast } from "../hooks/use-toast";
 import { apiRequest } from "../lib/queryClient";
 import type { Product, Order } from "@shared/schema";
 
-// O campo 'images' foi removido daqui. Como vamos enviar as imagens
-// como arquivos, não precisamos mais validá-las no formulário.
 const productSchema = z.object({
   name: z.string().min(1, "Nome é obrigatório"),
   description: z.string().min(10, "Descrição deve ter pelo menos 10 caracteres"),
@@ -57,7 +55,6 @@ export default function Admin() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [productToDelete, setProductToDelete] = useState<string | null>(null);
   
-  // Estados para gerenciar as imagens
   const [imagePreviewUrls, setImagePreviewUrls] = useState<string[]>([]);
   const [imageFiles, setImageFiles] = useState<File[]>([]);
 
@@ -271,7 +268,16 @@ export default function Admin() {
     setImagePreviewUrls(prevUrls => prevUrls.filter((_, i) => i !== indexToRemove));
   };
 
+  // ======================= ALTERAÇÃO FEITA AQUI =======================
   const handleSubmitProduct = (data: ProductFormData) => {
+    // Nosso "espião" para ver os dados do formulário ANTES de serem enviados
+    alert(JSON.stringify(data, null, 2));
+
+    // A linha abaixo impede que o formulário seja realmente enviado.
+    // REMOVA esta linha quando terminarmos de depurar.
+    return; 
+    
+    // O código original continua abaixo, mas não será executado por enquanto.
     if (editingProduct) {
       updateProductMutation.mutate({ id: editingProduct.id, data });
     } else {
@@ -299,6 +305,7 @@ export default function Admin() {
       createProductMutation.mutate(formData);
     }
   };
+  // ======================= FIM DA ALTERAÇÃO =======================
 
   const handleDeleteProduct = (id: string) => {
     setProductToDelete(id);
