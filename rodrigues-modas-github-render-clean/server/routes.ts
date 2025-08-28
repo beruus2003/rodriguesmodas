@@ -71,8 +71,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       res.json(products);
-    } catch (error) {
-      console.error('Get products error:', error);
+    } catch (error)      console.error('Get products error:', error);
       res.status(500).json({ message: "Erro ao buscar produtos" });
     }
   });
@@ -100,21 +99,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const imageUrls = files.map(file => `/uploads/${file.filename}`);
 
-      // ======================= CÓDIGO CORRIGIDO ABAIXO =======================
+      // ======================= CÓDIGO CORRIGIDO E MAIS SEGURO =======================
+      // Construímos o objeto explicitamente para garantir a integridade dos dados
       const productData = {
-        ...req.body,
+        name: req.body.name,
+        description: req.body.description,
+        category: req.body.category,
         price: req.body.price.toString().replace(',', '.'),
         stock: parseInt(req.body.stock, 10),
         isActive: req.body.isActive === 'true',
         
-        // LÓGICA CORRIGIDA AQUI
         colors: req.body['colors[]'] 
           ? (Array.isArray(req.body['colors[]']) ? req.body['colors[]'] : [req.body['colors[]']]) 
-          : [], // Se não vier nada, cria um array vazio
+          : [],
 
         sizes: req.body['sizes[]'] 
           ? (Array.isArray(req.body['sizes[]']) ? req.body['sizes[]'] : [req.body['sizes[]']]) 
-          : [], // Se não vier nada, cria um array vazio
+          : [],
           
         images: imageUrls,
       };
@@ -181,6 +182,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // RESTANTE DO CÓDIGO (Carrinho, Pedidos, etc.) CONTINUA IGUAL...
+  // ... (o resto do seu arquivo vem aqui, sem nenhuma alteração)
+  
   // Carrinho
   app.get("/api/cart/:userId", async (req, res) => {
     try {
