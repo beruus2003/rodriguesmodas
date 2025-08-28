@@ -1,31 +1,24 @@
 // server/storage.ts
-import { db } from './db'; // Importamos nossa conexão com o banco de dados
+import { db } from './db'; // Nossa conexão com o banco de dados Neon
 import { 
   products as productsTable,
-  orders as ordersTable,
-  cartItems as cartItemsTable,
-  users as usersTable,
-  mpTransactions as mpTransactionsTable,
-  type User,
-  type InsertUser,
+  // Outras tabelas serão usadas no futuro
   type Product,
   type InsertProduct,
-  type CartItem,
-  type InsertCartItem,
-  type Order,
-  type InsertOrder,
-  type MpTransaction,
-  type InsertMpTransaction
+  // Outros tipos...
 } from "@shared/schema";
-import { eq, desc } from "drizzle-orm";
-import type { IStorage } from './storage.interface'; // Vamos criar este arquivo a seguir
+import { eq } from "drizzle-orm";
+import type { IStorage } from './storage.interface'; // O "contrato" que criamos
 
 class DrizzleStorage implements IStorage {
   // --- PRODUTOS ---
   async getProducts(): Promise<Product[]> {
-    return await db.query.products.findMany({
+    console.log("Buscando produtos do banco de dados Neon...");
+    const products = await db.query.products.findMany({
       where: eq(productsTable.isActive, true)
     });
+    console.log(`Encontrados ${products.length} produtos.`);
+    return products;
   }
 
   async getProduct(id: string): Promise<Product | undefined> {
@@ -41,7 +34,9 @@ class DrizzleStorage implements IStorage {
   }
 
   async createProduct(product: InsertProduct): Promise<Product> {
+    console.log("Inserindo novo produto no banco de dados Neon...");
     const result = await db.insert(productsTable).values(product).returning();
+    console.log("Produto inserido com sucesso:", result[0].id);
     return result[0];
   }
 
@@ -55,26 +50,27 @@ class DrizzleStorage implements IStorage {
     return result.length > 0;
   }
 
-  // --- MÉTODOS DE CARRINHO, PEDIDOS, ETC. (A SEREM IMPLEMENTADOS) ---
-  // Por enquanto, vamos deixar os outros métodos com um erro para sabermos o que falta
-  async getUser(id: string): Promise<User | undefined> { throw new Error("Method not implemented."); }
-  async getUserByEmail(email: string): Promise<User | undefined> { throw new Error("Method not implemented."); }
-  async createUser(user: InsertUser): Promise<User> { throw new Error("Method not implemented."); }
-  async updateUser(id: string, user: Partial<User>): Promise<User | undefined> { throw new Error("Method not implemented."); }
-  async getCartItems(userId: string): Promise<CartItem[]> { throw new Error("Method not implemented."); }
-  async addToCart(item: InsertCartItem): Promise<CartItem> { throw new Error("Method not implemented."); }
-  async updateCartItem(id: string, quantity: number): Promise<CartItem | undefined> { throw new Error("Method not implemented."); }
-  async removeFromCart(id: string): Promise<boolean> { throw new Error("Method not implemented."); }
-  async clearCart(userId: string): Promise<boolean> { throw new Error("Method not implemented."); }
-  async getOrders(): Promise<Order[]> { throw new Error("Method not implemented."); }
-  async getOrdersByUser(userId: string): Promise<Order[]> { throw new Error("Method not implemented."); }
-  async getOrder(id: string): Promise<Order | undefined> { throw new Error("Method not implemented."); }
-  async createOrder(order: InsertOrder): Promise<Order> { throw new Error("Method not implemented."); }
-  async updateOrderStatus(id: string, status: string): Promise<Order | undefined> { throw new Error("Method not implemented."); }
-  async updateOrderPayment(id: string, paymentId: string, paymentStatus: string): Promise<Order | undefined> { throw new Error("Method not implemented."); }
-  async createMpTransaction(transaction: InsertMpTransaction): Promise<MpTransaction> { throw new Error("Method not implemented."); }
-  async getMpTransaction(paymentId: string): Promise<MpTransaction | undefined> { throw new Error("Method not implemented."); }
-  async updateMpTransaction(paymentId: string, data: Partial<MpTransaction>): Promise<MpTransaction | undefined> { throw new Error("Method not implemented."); }
+  // --- MÉTODOS DE CARRINHO, PEDIDOS, ETC. (A SEREM IMPLEMENTADOS NO FUTURO) ---
+  // Deixei os outros métodos aqui para que o código não quebre, mas eles
+  // ainda não fazem nada. O foco é resolver o problema dos produtos.
+  async getUser(id: string) { throw new Error("Method not implemented."); }
+  async getUserByEmail(email: string) { throw new Error("Method not implemented."); }
+  async createUser(user: any) { throw new Error("Method not implemented."); }
+  async updateUser(id: string, user: any) { throw new Error("Method not implemented."); }
+  async getCartItems(userId: string) { throw new Error("Method not implemented."); }
+  async addToCart(item: any) { throw new Error("Method not implemented."); }
+  async updateCartItem(id: string, quantity: number) { throw new Error("Method not implemented."); }
+  async removeFromCart(id: string) { throw new Error("Method not implemented."); }
+  async clearCart(userId: string) { throw new Error("Method not implemented."); }
+  async getOrders() { throw new Error("Method not implemented."); }
+  async getOrdersByUser(userId: string) { throw new Error("Method not implemented."); }
+  async getOrder(id: string) { throw new Error("Method not implemented."); }
+  async createOrder(order: any) { throw new Error("Method not implemented."); }
+  async updateOrderStatus(id: string, status: string) { throw new Error("Method not implemented."); }
+  async updateOrderPayment(id: string, paymentId: string, paymentStatus: string) { throw new Error("Method not implemented."); }
+  async createMpTransaction(transaction: any) { throw new Error("Method not implemented."); }
+  async getMpTransaction(paymentId: string) { throw new Error("Method not implemented."); }
+  async updateMpTransaction(paymentId: string, data: any) { throw new Error("Method not implemented."); }
 }
 
 export const storage = new DrizzleStorage();
