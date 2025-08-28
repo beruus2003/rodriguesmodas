@@ -1,3 +1,4 @@
+// Este é o código final e correto para o seu routes.ts
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
@@ -9,13 +10,11 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 
-// Esta parte "recria" o __dirname da forma moderna, corrigindo o erro
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 export async function registerRoutes(app: Express): Promise<Server> {
 
-  // A configuração do multer agora usa o __dirname corrigido
   const uploadDir = path.resolve(__dirname, '..', 'uploads');
   if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir, { recursive: true });
@@ -33,12 +32,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   const upload = multer({ storage: multerStorage });
 
-
-  // Autenticação - Login seguro no backend
   app.post("/api/auth/login", async (req, res) => {
     try {
       const { email, password } = req.body;
-
       if ((email === "Camila567" || email === "camila567") && password === "Marialuiza0510") {
         const authUser = {
           id: "admin-camila",
@@ -47,10 +43,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           phone: "+55 85 99180-2352",
           role: "admin",
         };
-
         return res.json({ success: true, user: authUser });
       }
-
       res.status(401).json({ success: false, message: "Credenciais inválidas" });
     } catch (error) {
       console.error('Auth error:', error);
@@ -58,20 +52,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Produtos
   app.get("/api/products", async (req, res) => {
     try {
       const { category } = req.query;
       let products;
-
       if (category) {
         products = await storage.getProductsByCategory(category as string);
       } else {
         products = await storage.getProducts();
       }
-
       res.json(products);
-    } catch (error) { // <-- A CHAVE { FALTANTE FOI ADICIONADA AQUI
+    } catch (error) {
       console.error('Get products error:', error);
       res.status(500).json({ message: "Erro ao buscar produtos" });
     }
@@ -93,11 +84,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/products", upload.array('image', 10), async (req, res) => {
     try {
       const files = req.files as Express.Multer.File[];
-      
       if (!files || files.length === 0) {
         return res.status(400).json({ message: "Pelo menos uma imagem é necessária." });
       }
-
       const imageUrls = files.map(file => `/uploads/${file.filename}`);
 
       const productData = {
@@ -107,21 +96,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         price: req.body.price.toString().replace(',', '.'),
         stock: parseInt(req.body.stock, 10),
         isActive: req.body.isActive === 'true',
-        
         colors: req.body['colors[]'] 
           ? (Array.isArray(req.body['colors[]']) ? req.body['colors[]'] : [req.body['colors[]']]) 
           : [],
-
         sizes: req.body['sizes[]'] 
           ? (Array.isArray(req.body['sizes[]']) ? req.body['sizes[]'] : [req.body['sizes[]']]) 
           : [],
-          
         images: imageUrls,
       };
 
       const validatedData = insertProductSchema.parse(productData);
       const product = await storage.createProduct(validatedData);
-
       res.status(201).json(product);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -136,29 +121,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-
   app.patch("/api/products/:id", async (req, res) => {
     try {
       console.log("📝 Atualizando produto:", req.params.id, JSON.stringify(req.body, null, 2));
-      
       const updateData = req.body;
-      
       if (updateData.price !== undefined) {
         if (typeof updateData.price === 'string') {
           updateData.price = updateData.price.replace(',', '.');
         }
         updateData.price = updateData.price.toString();
       }
-      
       if (updateData.stock !== undefined) {
         updateData.stock = parseInt(updateData.stock, 10);
       }
-
       const product = await storage.updateProduct(req.params.id, updateData);
       if (!product) {
         return res.status(404).json({ message: "Produto não encontrado" });
       }
-      
       console.log("✅ Produto atualizado:", JSON.stringify(product, null, 2));
       res.json(product);
     } catch (error) {
@@ -179,22 +158,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Erro ao remover produto" });
     }
   });
-  
-  // Carrinho
+
+  // O restante do arquivo (Carrinho, Pedidos, etc.) continua igual...
   app.get("/api/cart/:userId", async (req, res) => {
     try {
       const cartItems = await storage.getCartItems(req.params.userId);
-      
       const enrichedItems = await Promise.all(
         cartItems.map(async (item) => {
           const product = await storage.getProduct(item.productId);
-          return {
-            ...item,
-            product
-          };
+          return { ...item, product };
         })
       );
-
       res.json(enrichedItems);
     } catch (error) {
       console.error('Get cart error:', error);
@@ -253,7 +227,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Pedidos
   app.get("/api/orders", async (req, res) => {
     try {
       const orders = await storage.getOrders();
@@ -277,12 +250,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/orders", async (req, res) => {
     try {
       console.log("📝 Dados recebidos para pedido:", JSON.stringify(req.body, null, 2));
-
       const validatedData = insertOrderSchema.parse(req.body);
       const order = await storage.createOrder(validatedData);
-
       await storage.clearCart(validatedData.userId);
-
       res.status(201).json(order);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -311,7 +281,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Usuários
   app.get("/api/users/:id", async (req, res) => {
     try {
       const user = await storage.getUser(req.params.id);
@@ -338,8 +307,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // ==================== MERCADO PAGO ROUTES ====================
-  
   const paymentSchema = z.object({
     orderId: z.string(),
     paymentMethod: z.enum(['credit_card', 'debit_card', 'pix']),
@@ -374,16 +341,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/payment/card_issuers", async (req, res) => {
     try {
       const { payment_method_id, bin } = req.query;
-
       if (!payment_method_id || !bin) {
         return res.status(400).json({ message: "payment_method_id e bin são obrigatórios" });
       }
-
       const issuers = await mercadoPagoService.getCardIssuers(
         payment_method_id as string,
         bin as string
       );
-
       res.json(issuers);
     } catch (error) {
       console.error('Erro ao buscar emissores:', error);
@@ -394,17 +358,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/payment/installments", async (req, res) => {
     try {
       const { payment_method_id, amount, issuer_id } = req.query;
-
       if (!payment_method_id || !amount) {
         return res.status(400).json({ message: "payment_method_id e amount são obrigatórios" });
       }
-
       const installments = await mercadoPagoService.getInstallments(
         payment_method_id as string,
         Number(amount),
         issuer_id ? Number(issuer_id) : undefined
       );
-
       res.json(installments);
     } catch (error) {
       console.error('Erro ao buscar parcelas:', error);
@@ -416,12 +377,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const validatedData = paymentSchema.parse(req.body);
       const { orderId, paymentMethod, amount, payer, cardData } = validatedData;
-
       const order = await storage.getOrder(orderId);
       if (!order) {
         return res.status(404).json({ message: "Pedido não encontrado" });
       }
-
       const paymentData: PaymentData = {
         amount,
         email: payer.email,
@@ -430,9 +389,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         payer,
         cardData,
       };
-
       let paymentResult;
-
       if (paymentMethod === 'pix') {
         paymentResult = await mercadoPagoService.processPixPayment(paymentData);
       } else {
@@ -441,7 +398,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
         paymentResult = await mercadoPagoService.processCardPayment(paymentData);
       }
-
       const transaction = await storage.createMpTransaction({
         orderId,
         paymentId: paymentResult.id.toString(),
@@ -452,13 +408,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         amount: paymentResult.transaction_amount.toString(),
         transactionData: paymentResult,
       });
-
       await storage.updateOrderPayment(
         orderId,
         paymentResult.id.toString(),
         paymentResult.status === 'approved' ? 'approved' : 'pending'
       );
-
       res.json({
         success: true,
         paymentId: paymentResult.id,
@@ -470,7 +424,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           ticketUrl: paymentResult.point_of_interaction.transaction_data.ticket_url,
         }),
       });
-
     } catch (error) {
       console.error('Erro no processamento:', error);
       if (error instanceof z.ZodError) {
@@ -487,13 +440,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { paymentId } = req.params;
       const paymentStatus = await mercadoPagoService.getPaymentStatus(paymentId);
-
       await storage.updateMpTransaction(paymentId, {
         status: paymentStatus.status,
         statusDetail: paymentStatus.status_detail,
         transactionData: paymentStatus,
       });
-
       res.json({
         id: paymentStatus.id,
         status: paymentStatus.status,
@@ -504,7 +455,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         dateCreated: paymentStatus.date_created,
         dateApproved: paymentStatus.date_approved,
       });
-
     } catch (error) {
       console.error('Erro ao consultar pagamento:', error);
       res.status(500).json({ message: "Erro ao consultar status do pagamento" });
@@ -514,16 +464,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/payment/webhook", async (req, res) => {
     try {
       const { id, topic } = req.body;
-
       if (topic === 'payment') {
         const paymentStatus = await mercadoPagoService.getPaymentStatus(id.toString());
-
         const transaction = await storage.updateMpTransaction(id.toString(), {
           status: paymentStatus.status,
           statusDetail: paymentStatus.status_detail,
           transactionData: paymentStatus,
         });
-
         if (transaction) {
           const order = await storage.getOrder(transaction.orderId);
           if (order) {
@@ -536,7 +483,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
       }
-
       res.status(200).json({ received: true });
     } catch (error) {
       console.error('Erro no webhook:', error);
