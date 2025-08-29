@@ -1,4 +1,3 @@
-// TESTANDO UMA MUDANÇA SEGURA NA BRANCH DEVELOP
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
