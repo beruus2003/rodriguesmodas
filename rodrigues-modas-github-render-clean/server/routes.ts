@@ -1,6 +1,6 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import express from 'express'; // Importante adicionar o import do express
+import express from 'express';
 import { storage } from "./storage";
 import { insertUserSchema, insertProductSchema, insertOrderSchema, insertCartItemSchema, insertMpTransactionSchema } from "@shared/schema";
 import { z } from "zod";
@@ -17,12 +17,8 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Configuração do Cloudinary (lê as variáveis que você colocou na Render)
-cloudinary.config({
-  secure: true
-});
+cloudinary.config({ secure: true });
 
-// Configura o armazenamento para o Cloudinary em vez de local
 const multerStorage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: {
@@ -35,38 +31,21 @@ const upload = multer({ storage: multerStorage });
 
 export async function registerRoutes(app: Express): Promise<Server> {
 
-  app.use(express.json()); // Garante que o express consiga ler JSON
+  app.use(express.json());
 
   // --- ROTAS DE USUÁRIO / AUTENTICAÇÃO ---
 
-  // Rota para registrar um novo cliente
   app.post("/api/users/register", async (req, res) => {
     try {
       const { name, email, password } = insertUserSchema.pick({ name: true, email: true, password: true }).parse(req.body);
-
-      // 1. Verificar se o e-mail já existe
       const existingUser = await storage.getUserByEmail(email);
       if (existingUser) {
         return res.status(409).json({ message: "Este e-mail já está em uso." });
       }
-
-      // 2. Criptografar a senha
       const hashedPassword = await bcrypt.hash(password, 10);
-
-      // 3. Gerar token de verificação
       const verificationToken = crypto.randomUUID();
-
-      // 4. Salvar o usuário no banco de dados
-      const newUser = await storage.createUser({
-        name,
-        email,
-        password: hashedPassword,
-        verificationToken,
-      });
-
-      // 5. Enviar e-mail de verificação
+      const newUser = await storage.createUser({ name, email, password: hashedPassword, verificationToken });
       await sendVerificationEmail(newUser.email, verificationToken);
-
       res.status(201).json({ message: "Usuário registrado com sucesso! Por favor, verifique seu e-mail." });
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -77,33 +56,64 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Rota para o cliente clicar no link do e-mail
   app.get("/api/users/verify", async (req, res) => {
     const { token } = req.query;
-
     if (!token || typeof token !== 'string') {
       return res.status(400).send("Token de verificação inválido ou ausente.");
     }
-
     try {
       const user = await storage.getUserByVerificationToken(token);
       if (!user) {
         return res.status(400).send("Token de verificação inválido ou expirado.");
       }
-      
       await storage.verifyUser(user.id);
-
-      // Redireciona o usuário para a página de login com uma mensagem de sucesso
       const frontendUrl = process.env.FRONTEND_URL || '';
       return res.redirect(`${frontendUrl}/login?verified=true`);
-
     } catch (error) {
       console.error("❌ Erro ao verificar token:", error);
       return res.status(500).send("Erro interno ao verificar sua conta.");
     }
   });
+
+  // ======================= NOVA ROTA DE LOGIN DE CLIENTE =======================
+  app.post("/api/users/login", async (req, res) => {
+    try {
+        const { email, password } = z.object({
+            email: z.string().email(),
+            password: z.string(),
+        }).parse(req.body);
+
+        // 1. Encontrar o usuário pelo e-mail
+        const user = await storage.getUserByEmail(email);
+        if (!user || !user.password) {
+            return res.status(401).json({ message: "E-mail ou senha inválidos." });
+        }
+
+        // 2. Verificar se a conta foi ativada
+        if (!user.emailVerified) {
+            return res.status(403).json({ message: "Sua conta ainda não foi verificada. Por favor, cheque seu e-mail." });
+        }
+
+        // 3. Comparar a senha enviada com a senha criptografada no banco
+        const isPasswordValid = await bcrypt.compare(password, user.password);
+        if (!isPasswordValid) {
+            return res.status(401).json({ message: "E-mail ou senha inválidos." });
+        }
+
+        // 4. Se tudo estiver certo, retorna os dados do usuário (sem a senha)
+        const { password: _, ...userWithoutPassword } = user;
+        res.json({ success: true, user: userWithoutPassword });
+
+    } catch (error) {
+        if (error instanceof z.ZodError) {
+            return res.status(400).json({ message: "Dados inválidos", errors: error.flatten().fieldErrors });
+        }
+        console.error("❌ Erro no login do usuário:", error);
+        res.status(500).json({ message: "Erro interno do servidor" });
+    }
+  });
+  // ======================= FIM DA NOVA ROTA =======================
   
-  // Rota de login do Admin (mantida como estava)
   app.post("/api/auth/login", async (req, res) => {
     try {
       const { email, password } = req.body;
@@ -160,13 +170,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!files || files.length === 0) {
         return res.status(400).json({ message: "Pelo menos uma imagem é necessária." });
       }
-      
       const imageUrls = files.map(file => (file as any).path);
-
       const productData = {
-        name: req.body.name,
-        description: req.body.description,
-        category: req.body.category,
+        name: req.body.name, description: req.body.description, category: req.body.category,
         price: req.body.price.toString().replace(',', '.'),
         stock: parseInt(req.body.stock, 10),
         isActive: req.body.isActive === 'true',
@@ -174,17 +180,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         sizes: req.body.sizes ? (Array.isArray(req.body.sizes) ? req.body.sizes : [req.body.sizes]) : [],
         images: imageUrls,
       };
-
       const validatedData = insertProductSchema.parse(productData);
       const product = await storage.createProduct(validatedData);
       res.status(201).json(product);
     } catch (error) {
       if (error instanceof z.ZodError) {
         console.error("❌ Erro de validação Zod:", error.flatten());
-        return res.status(400).json({
-          message: "Dados inválidos",
-          errors: error.flatten().fieldErrors,
-        });
+        return res.status(400).json({ message: "Dados inválidos", errors: error.flatten().fieldErrors, });
       }
       console.error("❌ Erro ao criar produto:", error);
       res.status(500).json({ message: "Erro interno do servidor" });
