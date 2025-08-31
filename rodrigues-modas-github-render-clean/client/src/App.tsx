@@ -16,7 +16,8 @@ import Home from "./pages/Home";
 import Products from "./pages/Products";
 import Admin from "./pages/Admin";
 import Register from "./pages/Register";
-import VerifyAccount from "./pages/VerifyAccount"; // <-- 1. IMPORTAMOS A PÁGINA DE VERIFICAÇÃO
+import VerifyAccount from "./pages/VerifyAccount";
+import Login from "./pages/Login"; // <-- 1. IMPORTAMOS A PÁGINA DE LOGIN
 import NotFound from "./pages/not-found";
 
 // Hooks
@@ -30,7 +31,8 @@ function Router() {
       <Route path="/" component={Home} />
       <Route path="/produtos" component={Products} />
       <Route path="/cadastro" component={Register} />
-      <Route path="/verificar-conta" component={VerifyAccount} /> {/* <-- 2. ADICIONAMOS A ROTA NOVA */}
+      <Route path="/verificar-conta" component={VerifyAccount} />
+      <Route path="/login" component={Login} /> {/* <-- 2. ADICIONAMOS A ROTA DE LOGIN */}
       {isAdmin && <Route path="/admin" component={Admin} />}
       <Route component={NotFound} />
     </Switch>
@@ -53,17 +55,13 @@ function App() {
   const handleCheckoutClose = () => setCheckoutOpen(false);
   
   const handleAuthOpen = () => setAuthOpen(true);
-  const handleAuthClose = () => handleAuthClose();
+  const handleAuthClose = () => setAuthOpen(false);
 
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <div className="min-h-screen bg-background">
-          <Header 
-            onCartOpen={handleCartOpen}
-            // A prop onAuthOpen não é mais necessária no Header novo, podemos remover se quisermos
-            // onAuthOpen={handleAuthOpen} 
-          />
+          <Header onCartOpen={handleCartOpen} />
           
           <main>
             <Router />
