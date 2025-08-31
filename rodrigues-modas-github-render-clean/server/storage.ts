@@ -1,16 +1,14 @@
 // server/storage.ts
-import { db } from './db'; // Nossa conexão com o banco de dados Neon
+import { db } from './db';
 import { 
   products as productsTable,
   users as usersTable,
-  carts as cartsTable, // Adicionei a importação da tabela de carrinhos
-  cartItems as cartItemsTable, // Adicionei a importação dos itens do carrinho
+  cartItems as cartItemsTable, // Usando a tabela correta do seu schema
+  // Removida a importação de 'carts' que não existe
   type User,
   type InsertUser,
   type Product,
   type InsertProduct,
-  type Cart,
-  type InsertCart,
   type CartItem,
   type InsertCartItem,
   type Order,
@@ -18,8 +16,8 @@ import {
   type MpTransaction,
   type InsertMpTransaction
 } from "@shared/schema";
-import { eq, and } from "drizzle-orm"; // Adicionei o operador "and"
-import type { IStorage } from './storage.interface'; // O "contrato" que criamos
+import { eq, and } from "drizzle-orm";
+import type { IStorage } from './storage.interface';
 
 class DrizzleStorage implements IStorage {
   // --- USUÁRIOS ---
@@ -43,8 +41,7 @@ class DrizzleStorage implements IStorage {
 
   // --- PRODUTOS ---
   async getProducts(): Promise<Product[]> {
-    const products = await db.query.products.findMany({ where: eq(productsTable.isActive, true) });
-    return products;
+    return await db.query.products.findMany({ where: eq(productsTable.isActive, true) });
   }
 
   async getProduct(id: string): Promise<Product | undefined> {
@@ -70,41 +67,44 @@ class DrizzleStorage implements IStorage {
     return result.length > 0;
   }
 
-  // ======================= NOVAS FUNÇÕES IMPLEMENTADAS AQUI =======================
-  // --- CARRINHO ---
+  // ======================= FUNÇÕES DO CARRINHO CORRIGIDAS =======================
+  
+  /**
+   * Busca todos os itens do carrinho de um usuário, já com os dados dos produtos.
+   */
+  async getCartItems(userId: string): Promise<(CartItem & { product: Product })[]> {
+    const items = await db.query.cartItems.findMany({
+        where: eq(cartItemsTable.userId, userId),
+        with: {
+            product: true // Busca os dados do produto relacionado automaticamente
+        },
+        orderBy: (cartItems, { asc }) => [asc(cartItems.createdAt)],
+    });
 
+    return items;
+  }
+  
   /**
    * Adiciona um item ao carrinho de um usuário.
-   * Se o carrinho não existir, ele é criado.
-   * Se o item (mesmo produto, tamanho e cor) já existir no carrinho, a quantidade é somada.
+   * Se o item (mesmo produto, tamanho e cor) já existir, a quantidade é somada.
    * Se o item não existir, ele é criado.
    */
   async addToCart(item: InsertCartItem): Promise<CartItem> {
-    if (!item.userId || !item.productId || !item.quantity || !item.size || !item.color) {
-      throw new Error("Dados insuficientes para adicionar ao carrinho (userId, productId, quantity, size, color).");
+    if (!item.userId || !item.productId || !item.quantity || !item.selectedSize || !item.selectedColor) {
+      throw new Error("Dados insuficientes para adicionar ao carrinho.");
     }
-  
-    // 1. Encontra ou cria o carrinho principal do usuário
-    let userCart = await db.query.carts.findFirst({ where: eq(cartsTable.userId, item.userId) });
-  
-    if (!userCart) {
-      const newCartResult = await db.insert(cartsTable).values({ userId: item.userId }).returning();
-      userCart = newCartResult[0];
-    }
-    
-    if (!userCart) throw new Error("Não foi possível criar ou encontrar o carrinho do usuário.");
-  
-    // 2. Verifica se o item exato já existe no carrinho
+
+    // 1. Verifica se o item exato já existe no carrinho do usuário
     const existingItem = await db.query.cartItems.findFirst({
       where: and(
-        eq(cartItemsTable.cartId, userCart.id),
+        eq(cartItemsTable.userId, item.userId),
         eq(cartItemsTable.productId, item.productId),
-        eq(cartItemsTable.size, item.size),
-        eq(cartItemsTable.color, item.color)
+        eq(cartItemsTable.selectedSize, item.selectedSize),
+        eq(cartItemsTable.selectedColor, item.selectedColor)
       )
     });
-  
-    // 3. Se existir, atualiza a quantidade. Se não, insere um novo.
+
+    // 2. Se existir, atualiza a quantidade. Se não, insere um novo.
     if (existingItem) {
       const newQuantity = existingItem.quantity + item.quantity;
       const updatedItems = await db.update(cartItemsTable)
@@ -113,40 +113,10 @@ class DrizzleStorage implements IStorage {
         .returning();
       return updatedItems[0];
     } else {
-      const newItems = await db.insert(cartItemsTable).values({
-        cartId: userCart.id,
-        productId: item.productId,
-        quantity: item.quantity,
-        size: item.size,
-        color: item.color,
-      }).returning();
+      const newItems = await db.insert(cartItemsTable).values(item).returning();
       return newItems[0];
     }
   }
-
-  /**
-   * Busca todos os itens do carrinho de um usuário, já com os dados dos produtos.
-   */
-  async getCartItems(userId: string): Promise<(CartItem & { product: Product })[]> {
-    const userCart = await db.query.carts.findFirst({
-        where: eq(cartsTable.userId, userId)
-    });
-
-    if (!userCart) {
-        return []; // Se o usuário não tem carrinho, retorna um array vazio.
-    }
-
-    const items = await db.query.cartItems.findMany({
-        where: eq(cartItemsTable.cartId, userCart.id),
-        with: {
-            product: true // Mágica do Drizzle: busca os dados do produto relacionado automaticamente!
-        },
-        orderBy: (cartItems, { asc }) => [asc(cartItems.createdAt)],
-    });
-
-    return items;
-  }
-
 
   // --- MÉTODOS AINDA NÃO IMPLEMENTADOS ---
   async getUser(id: string) { throw new Error("Method not implemented."); }
