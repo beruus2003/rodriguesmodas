@@ -1,14 +1,17 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
+import express from 'express'; // Importante adicionar o import do express
 import { storage } from "./storage";
-import { insertProductSchema, insertOrderSchema, insertCartItemSchema, insertMpTransactionSchema } from "@shared/schema";
+import { insertUserSchema, insertProductSchema, insertOrderSchema, insertCartItemSchema, insertMpTransactionSchema } from "@shared/schema";
 import { z } from "zod";
 import { mercadoPagoService, type PaymentData } from "./mercadopago";
 import multer from 'multer';
 import { v2 as cloudinary } from 'cloudinary';
 import { CloudinaryStorage } from 'multer-storage-cloudinary';
+import bcrypt from 'bcrypt';
+import crypto from 'crypto';
+import { sendVerificationEmail } from "./email.service";
 import path from 'path';
-import fs from 'fs';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -23,7 +26,7 @@ cloudinary.config({
 const multerStorage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: {
-    folder: 'products', // Salva as imagens numa pasta chamada 'products' no Cloudinary
+    folder: 'products',
     allowed_formats: ['jpg', 'png', 'webp', 'jpeg'],
   } as any,
 });
@@ -32,7 +35,75 @@ const upload = multer({ storage: multerStorage });
 
 export async function registerRoutes(app: Express): Promise<Server> {
 
-  // Autenticação - Login seguro no backend
+  app.use(express.json()); // Garante que o express consiga ler JSON
+
+  // --- ROTAS DE USUÁRIO / AUTENTICAÇÃO ---
+
+  // Rota para registrar um novo cliente
+  app.post("/api/users/register", async (req, res) => {
+    try {
+      const { name, email, password } = insertUserSchema.pick({ name: true, email: true, password: true }).parse(req.body);
+
+      // 1. Verificar se o e-mail já existe
+      const existingUser = await storage.getUserByEmail(email);
+      if (existingUser) {
+        return res.status(409).json({ message: "Este e-mail já está em uso." });
+      }
+
+      // 2. Criptografar a senha
+      const hashedPassword = await bcrypt.hash(password, 10);
+
+      // 3. Gerar token de verificação
+      const verificationToken = crypto.randomUUID();
+
+      // 4. Salvar o usuário no banco de dados
+      const newUser = await storage.createUser({
+        name,
+        email,
+        password: hashedPassword,
+        verificationToken,
+      });
+
+      // 5. Enviar e-mail de verificação
+      await sendVerificationEmail(newUser.email, verificationToken);
+
+      res.status(201).json({ message: "Usuário registrado com sucesso! Por favor, verifique seu e-mail." });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Dados inválidos", errors: error.flatten().fieldErrors });
+      }
+      console.error("❌ Erro ao registrar usuário:", error);
+      res.status(500).json({ message: "Erro interno do servidor" });
+    }
+  });
+
+  // Rota para o cliente clicar no link do e-mail
+  app.get("/api/users/verify", async (req, res) => {
+    const { token } = req.query;
+
+    if (!token || typeof token !== 'string') {
+      return res.status(400).send("Token de verificação inválido ou ausente.");
+    }
+
+    try {
+      const user = await storage.getUserByVerificationToken(token);
+      if (!user) {
+        return res.status(400).send("Token de verificação inválido ou expirado.");
+      }
+      
+      await storage.verifyUser(user.id);
+
+      // Redireciona o usuário para a página de login com uma mensagem de sucesso
+      const frontendUrl = process.env.FRONTEND_URL || '';
+      return res.redirect(`${frontendUrl}/login?verified=true`);
+
+    } catch (error) {
+      console.error("❌ Erro ao verificar token:", error);
+      return res.status(500).send("Erro interno ao verificar sua conta.");
+    }
+  });
+  
+  // Rota de login do Admin (mantida como estava)
   app.post("/api/auth/login", async (req, res) => {
     try {
       const { email, password } = req.body;
@@ -90,7 +161,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Pelo menos uma imagem é necessária." });
       }
       
-      const imageUrls = files.map(file => (file as any).path); // Multer agora nos dá a URL segura do Cloudinary
+      const imageUrls = files.map(file => (file as any).path);
 
       const productData = {
         name: req.body.name,
