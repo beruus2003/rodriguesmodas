@@ -2,16 +2,53 @@
 import { db } from './db'; // Nossa conexão com o banco de dados Neon
 import { 
   products as productsTable,
-  // Outras tabelas serão usadas no futuro
+  users as usersTable,
+  type User,
+  type InsertUser,
   type Product,
   type InsertProduct,
-  // Outros tipos...
+  type CartItem,
+  type InsertCartItem,
+  type Order,
+  type InsertOrder,
+  type MpTransaction,
+  type InsertMpTransaction
 } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import type { IStorage } from './storage.interface'; // O "contrato" que criamos
 
 class DrizzleStorage implements IStorage {
-  // --- PRODUTOS ---
+  // ======================= NOVAS FUNÇÕES IMPLEMENTADAS AQUI =======================
+  // --- USUÁRIOS ---
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    return await db.query.users.findFirst({
+      where: eq(usersTable.email, email.toLowerCase()),
+    });
+  }
+  
+  async getUserByVerificationToken(token: string): Promise<User | undefined> {
+    return await db.query.users.findFirst({
+      where: eq(usersTable.verificationToken, token),
+    });
+  }
+
+  async createUser(user: InsertUser): Promise<User> {
+    const result = await db.insert(usersTable).values({
+      ...user,
+      email: user.email.toLowerCase() // Sempre salva o email em minúsculas para evitar duplicatas
+    }).returning();
+    return result[0];
+  }
+
+  async verifyUser(id: string): Promise<User | undefined> {
+    const result = await db.update(usersTable)
+      .set({ emailVerified: new Date(), verificationToken: null }) // Marca como verificado e limpa o token
+      .where(eq(usersTable.id, id))
+      .returning();
+    return result[0];
+  }
+
+  // --- PRODUTOS (já implementados) ---
   async getProducts(): Promise<Product[]> {
     console.log("Buscando produtos do banco de dados Neon...");
     const products = await db.query.products.findMany({
@@ -40,7 +77,7 @@ class DrizzleStorage implements IStorage {
     return result[0];
   }
 
-  async updateProduct(id: string, product: Partial<Product>): Promise<Product | undefined> {
+  async updateUser(id: string, product: Partial<Product>): Promise<Product | undefined> {
     const result = await db.update(productsTable).set(product).where(eq(productsTable.id, id)).returning();
     return result[0];
   }
@@ -50,12 +87,9 @@ class DrizzleStorage implements IStorage {
     return result.length > 0;
   }
 
-  // --- MÉTODOS DE CARRINHO, PEDIDOS, ETC. (A SEREM IMPLEMENTADOS NO FUTURO) ---
-  // Deixei os outros métodos aqui para que o código não quebre, mas eles
-  // ainda não fazem nada. O foco é resolver o problema dos produtos.
+  // --- MÉTODOS AINDA NÃO IMPLEMENTADOS ---
+  // (O resto dos métodos continua aqui, sem alterações por enquanto)
   async getUser(id: string) { throw new Error("Method not implemented."); }
-  async getUserByEmail(email: string) { throw new Error("Method not implemented."); }
-  async createUser(user: any) { throw new Error("Method not implemented."); }
   async updateUser(id: string, user: any) { throw new Error("Method not implemented."); }
   async getCartItems(userId: string) { throw new Error("Method not implemented."); }
   async addToCart(item: any) { throw new Error("Method not implemented."); }
