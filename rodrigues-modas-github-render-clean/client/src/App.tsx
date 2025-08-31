@@ -15,6 +15,7 @@ import { AuthModal } from "./components/AuthModal";
 import Home from "./pages/Home";
 import Products from "./pages/Products";
 import Admin from "./pages/Admin";
+import Register from "./pages/Register"; // <-- 1. IMPORTAMOS A NOVA PÁGINA
 import NotFound from "./pages/not-found";
 
 // Hooks
@@ -27,6 +28,7 @@ function Router() {
     <Switch>
       <Route path="/" component={Home} />
       <Route path="/produtos" component={Products} />
+      <Route path="/cadastro" component={Register} /> {/* <-- 2. ADICIONAMOS A NOVA ROTA */}
       {isAdmin && <Route path="/admin" component={Admin} />}
       <Route component={NotFound} />
     </Switch>
@@ -49,7 +51,7 @@ function App() {
   const handleCheckoutClose = () => setCheckoutOpen(false);
   
   const handleAuthOpen = () => setAuthOpen(true);
-  const handleAuthClose = () => setAuthOpen(false);
+  const handleAuthClose = () => handleAuthClose();
 
   return (
     <QueryClientProvider client={queryClient}>
