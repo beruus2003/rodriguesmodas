@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "../lib/queryClient";
-import type { CartItem, CartItemWithProduct, Product } from "../types/index"; // Importamos CartItem
+import type { CartItem, CartItemWithProduct, Product } from "../types/index";
 import { useAuth } from "./use-auth";
 import { useToast } from "./use-toast";
 
@@ -12,6 +12,7 @@ const getGuestCartFromStorage = (): CartItemWithProduct[] => {
     return savedCart ? JSON.parse(savedCart) : [];
   } catch (error) {
     console.error("Erro ao ler o carrinho do localStorage:", error);
+    window.localStorage.removeItem('guest-cart'); // Limpa dados corrompidos
     return [];
   }
 };
@@ -26,37 +27,22 @@ export function useCart() {
   useEffect(() => {
     if (!user) {
       window.localStorage.setItem('guest-cart', JSON.stringify(guestCart));
+    } else {
+      // Opcional: Limpar o carrinho de convidado após o login
+      window.localStorage.removeItem('guest-cart');
     }
   }, [guestCart, user]);
 
   const {
     data: dbCartItems = [],
     isLoading,
-    error
-  } = useQuery<CartItemWithProduct[]>({ // Mantemos CartItemWithProduct para consistência
-    queryKey: ["/api/cart", user?.id],
+    error,
+  } = useQuery<CartItemWithProduct[]>({
+    queryKey: ["cart", user?.id], // Chave de query mais semântica
     queryFn: async () => {
       const res = await apiRequest("GET", `/api/cart/${user!.id}`);
-      const items: CartItem[] = await res.json();
-      
-      // [PARA TESTE] Como a API não retorna mais o produto, criamos um 'product' falso
-      // Isso evita que o resto do frontend quebre durante o nosso teste.
-      return items.map(item => ({
-        ...item,
-        product: {
-          id: item.productId,
-          name: `Produto ${item.productId.substring(0, 4)}...`,
-          price: '0.00',
-          images: [],
-          description: '',
-          category: '',
-          colors: [],
-          sizes: [],
-          stock: 0,
-          isActive: true,
-          createdAt: new Date(),
-        }
-      }));
+      if (!res.ok) throw new Error("Falha ao buscar o carrinho");
+      return res.json();
     },
     enabled: !!user,
   });
@@ -71,14 +57,13 @@ export function useCart() {
       selectedSize: string;
     }) => {
       if (user) {
-        const response = await apiRequest("POST", "/api/cart", {
+        return apiRequest("POST", "/api/cart", {
           userId: user.id,
           productId: item.product.id,
           quantity: item.quantity,
           selectedColor: item.selectedColor,
           selectedSize: item.selectedSize,
         });
-        return response.json();
       } else {
         setGuestCart(currentCart => {
           const existingItemIndex = currentCart.findIndex(
@@ -109,35 +94,38 @@ export function useCart() {
       }
     },
     onSuccess: () => {
-      if (user) {
-        queryClient.invalidateQueries({ queryKey: ["/api/cart", user.id] });
-      }
-      toast({ title: "Produto adicionado", description: "Item adicionado ao carrinho com sucesso!" });
+      queryClient.invalidateQueries({ queryKey: ["cart", user?.id] });
+      toast({
+        title: "Produto adicionado!",
+        description: "Seu item já está no carrinho.",
+      });
     },
-    onError: (error) => {
-      console.error("Erro ao adicionar ao carrinho:", error);
-      toast({ title: "Erro", description: "Não foi possível adicionar o item ao carrinho.", variant: "destructive" });
+    onError: (err) => {
+      console.error("Erro ao adicionar ao carrinho:", err);
+      toast({
+        title: "Erro",
+        description: "Não foi possível adicionar o item.",
+        variant: "destructive",
+      });
     },
   });
-  
+
+  // (As outras mutações, como update, remove e clear, podem ser adicionadas aqui depois)
+
   const subtotal = cartItems.reduce((total, item) => {
-    if (!item.product) return total; // Guarda de segurança
     const price = typeof item.product.price === 'string' ? parseFloat(item.product.price) : item.product.price;
     return total + (price * item.quantity);
   }, 0);
 
   const itemCount = cartItems.reduce((total, item) => total + item.quantity, 0);
 
-  const isUpdating = addToCartMutation.isPending;
-
   return {
     cartItems,
     subtotal,
     itemCount,
     isLoading,
-    isUpdating,
+    isUpdating: addToCartMutation.isPending,
     error,
     addToCart: addToCartMutation.mutate,
-    // ... as outras funções de mutação ...
   };
 }
