@@ -68,21 +68,19 @@ export function Cart({ isOpen, onClose, onCheckout }: CartProps) {
           </SheetTitle>
         </SheetHeader>
 
-        {/* [PARA TESTE] O visual aqui estará simplificado */}
         <div className="flex-1 overflow-y-auto space-y-4 py-4 pr-2">
           {cartItems.map((item) => (
             <div key={item.id} className="flex space-x-4">
               <div className="w-20 h-20 bg-muted rounded-lg overflow-hidden flex-shrink-0">
                 <img
-                  src={item.product?.images?.[0] || "/placeholder.png"}
-                  alt={item.product?.name || "Produto"}
+                  src={item.product.images[0] || "/placeholder.png"}
+                  alt={item.product.name}
                   className="w-full h-full object-cover"
                 />
               </div>
-
               <div className="flex-1 flex flex-col justify-between py-1">
                 <div>
-                  <h3 className="font-medium text-sm leading-tight line-clamp-2">{item.product?.name || `Produto ${item.productId}`}</h3>
+                  <h3 className="font-medium text-sm leading-tight line-clamp-2">{item.product.name}</h3>
                   <p className="text-xs text-muted-foreground mt-1">Cor: {item.selectedColor} / Tam: {item.selectedSize}</p>
                 </div>
                 <div className="flex justify-between items-center mt-2">
@@ -91,7 +89,7 @@ export function Cart({ isOpen, onClose, onCheckout }: CartProps) {
                     <span className="text-sm font-medium w-8 text-center">{item.quantity}</span>
                     <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => updateQuantity && updateQuantity(item.id, item.quantity + 1)} disabled={isUpdating}><Plus className="h-4 w-4" /></Button>
                   </div>
-                  <span className="font-semibold text-sm">{formatPrice(item.product ? parseFloat(item.product.price) * item.quantity : 0)}</span>
+                  <span className="font-semibold text-sm">{formatPrice(parseFloat(item.product.price) * item.quantity)}</span>
                 </div>
               </div>
               <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive" onClick={() => removeFromCart && removeFromCart(item.id)} disabled={isUpdating}>
