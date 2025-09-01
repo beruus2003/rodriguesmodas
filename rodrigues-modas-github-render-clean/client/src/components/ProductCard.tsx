@@ -11,8 +11,6 @@ interface ProductCardProps {
   product: Product;
 }
 
-// ======================= ALTERAÇÃO FEITA AQUI =======================
-// Mapeamento de nomes de cores para seus códigos hexadecimais
 const colorMap: { [key: string]: string } = {
   branco: "#ffffff",
   preto: "#000000",
@@ -22,24 +20,19 @@ const colorMap: { [key: string]: string } = {
   vermelho: "#ff6b6b",
   roxo: "#dda0dd",
   champagne: "#f7e7ce",
-  // Novas cores adicionadas
   "lilás": "#C8A2C8",
   "vinho": "#722F37",
   "azul bebê": "#89CFF0",
   "verde militar": "#556B2F",
   "salmão escuro": "#E9967A",
-  "bege": "#D2B48C",         // <-- CORRIGIDO
+  "bege": "#D2B48C",
   "azul marinho": "#000080",
   "salmão claro": "#FFA07A",
   "amarelo": "#FFFF00",
-  "marrom": "#653F25",       // <-- CORRIGIDO
+  "marrom": "#653F25",
 };
-// ======================= FIM DA ALTERAÇÃO =======================
 
-// Função para obter a cor de fundo com base no nome
 const getBackgroundColor = (colorName: string) => {
-  // Converte o nome da cor para minúsculas e busca no mapa
-  // Se não encontrar, retorna uma cor padrão
   return colorMap[colorName.toLowerCase()] || "#f0f0f0";
 };
 
@@ -62,7 +55,9 @@ export function ProductCard({ product }: ProductCardProps) {
     }
 
     addToCart({
-      productId: product.id,
+      // ================== ESTA É A ÚNICA LINHA ALTERADA ==================
+      product: product, // Enviando o objeto product inteiro em vez de apenas o ID
+      // ==================================================================
       quantity: 1,
       selectedColor,
       selectedSize,
@@ -82,7 +77,6 @@ export function ProductCard({ product }: ProductCardProps) {
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      {/* Imagem do produto */}
       <div className="relative aspect-square overflow-hidden">
         <img
           src={product.images?.[0] || "https://images.unsplash.com/photo-1594736797933-d0501ba2fe65?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&h=400"}
@@ -90,7 +84,6 @@ export function ProductCard({ product }: ProductCardProps) {
           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
         />
         
-        {/* Badge de categoria */}
         <Badge 
           variant="secondary" 
           className="absolute top-2 left-2 bg-white/90 text-accent"
@@ -98,7 +91,6 @@ export function ProductCard({ product }: ProductCardProps) {
           {product.category}
         </Badge>
 
-        {/* Botão de favorito */}
         <Button
           variant="ghost"
           size="icon"
@@ -107,7 +99,6 @@ export function ProductCard({ product }: ProductCardProps) {
           <Heart className="h-4 w-4" />
         </Button>
 
-        {/* Overlay com ações rápidas */}
         {isHovered && (
           <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200">
             <Button
@@ -121,7 +112,6 @@ export function ProductCard({ product }: ProductCardProps) {
           </div>
         )}
 
-        {/* Indicador de estoque baixo */}
         {product.stock <= 5 && product.stock > 0 && (
           <Badge
             variant="destructive"
@@ -131,7 +121,6 @@ export function ProductCard({ product }: ProductCardProps) {
           </Badge>
         )}
 
-        {/* Produto esgotado */}
         {product.stock === 0 && (
           <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
             <Badge variant="destructive" className="text-lg py-2 px-4">
@@ -142,11 +131,9 @@ export function ProductCard({ product }: ProductCardProps) {
       </div>
 
       <CardContent className="p-4">
-        {/* Nome e descrição */}
         <h3 className="font-semibold text-lg mb-2 line-clamp-1">{product.name}</h3>
         <p className="text-gray-600 text-sm mb-3 line-clamp-2">{product.description}</p>
 
-        {/* Opções de cor */}
         <div className="flex space-x-2 mb-3">
           <span className="text-xs font-medium text-gray-700">Cores:</span>
           <div className="flex space-x-1">
@@ -168,7 +155,6 @@ export function ProductCard({ product }: ProductCardProps) {
           </div>
         </div>
 
-        {/* Opções de tamanho */}
         <div className="flex space-x-1 mb-4">
           <span className="text-xs font-medium text-gray-700 mr-2">Tamanhos:</span>
           {product.sizes?.map((size) => (
@@ -186,7 +172,6 @@ export function ProductCard({ product }: ProductCardProps) {
           ))}
         </div>
 
-        {/* Preço e ação */}
         <div className="flex justify-between items-center">
           <span className="text-xl font-bold text-accent">
             {formatPrice(product.price)}
@@ -201,7 +186,6 @@ export function ProductCard({ product }: ProductCardProps) {
           </Button>
         </div>
 
-        {/* Informações de estoque */}
         <div className="mt-2 text-xs text-gray-500">
           {product.stock > 0 ? (
             <span>{product.stock} unidades disponíveis</span>
