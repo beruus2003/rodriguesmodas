@@ -71,6 +71,9 @@ export function useAuth() {
     }
   };
 
+  // ================== "ESPIÃO" ADICIONADO AQUI ==================
+  console.log("DEBUG: useAuth está retornando:", { user, loading });
+
   return {
     user,
     loading,
