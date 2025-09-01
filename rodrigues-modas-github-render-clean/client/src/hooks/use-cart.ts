@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "../lib/queryClient";
-import type { CartItemWithProduct, Product } from "../types/index";
+import type { CartItem, CartItemWithProduct, Product } from "../types/index"; // Importamos CartItem
 import { useAuth } from "./use-auth";
 import { useToast } from "./use-toast";
 
@@ -18,9 +18,6 @@ const getGuestCartFromStorage = (): CartItemWithProduct[] => {
 
 export function useCart() {
   const { user } = useAuth();
-  // ================== "ESPIÃO" 1 ADICIONADO AQUI ==================
-  console.log("DEBUG: useCart recebeu este user:", user);
-
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -36,11 +33,30 @@ export function useCart() {
     data: dbCartItems = [],
     isLoading,
     error
-  } = useQuery<CartItemWithProduct[]>({
+  } = useQuery<CartItemWithProduct[]>({ // Mantemos CartItemWithProduct para consistência
     queryKey: ["/api/cart", user?.id],
     queryFn: async () => {
       const res = await apiRequest("GET", `/api/cart/${user!.id}`);
-      return res.json();
+      const items: CartItem[] = await res.json();
+      
+      // [PARA TESTE] Como a API não retorna mais o produto, criamos um 'product' falso
+      // Isso evita que o resto do frontend quebre durante o nosso teste.
+      return items.map(item => ({
+        ...item,
+        product: {
+          id: item.productId,
+          name: `Produto ${item.productId.substring(0, 4)}...`,
+          price: '0.00',
+          images: [],
+          description: '',
+          category: '',
+          colors: [],
+          sizes: [],
+          stock: 0,
+          isActive: true,
+          createdAt: new Date(),
+        }
+      }));
     },
     enabled: !!user,
   });
@@ -105,6 +121,7 @@ export function useCart() {
   });
   
   const subtotal = cartItems.reduce((total, item) => {
+    if (!item.product) return total; // Guarda de segurança
     const price = typeof item.product.price === 'string' ? parseFloat(item.product.price) : item.product.price;
     return total + (price * item.quantity);
   }, 0);
@@ -112,9 +129,6 @@ export function useCart() {
   const itemCount = cartItems.reduce((total, item) => total + item.quantity, 0);
 
   const isUpdating = addToCartMutation.isPending;
-
-  // ================== "ESPIÃO" 2 ADICIONADO AQUI ==================
-  console.log("DEBUG: useCart vai retornar estes cartItems:", cartItems);
 
   return {
     cartItems,
