@@ -4,7 +4,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { useCart } from "../hooks/use-cart";
-import { Loader2 } from "lucide-react"; // Importando um ícone de loading
+import { Loader2 } from "lucide-react";
 
 interface CartProps {
   isOpen: boolean;
@@ -13,7 +13,10 @@ interface CartProps {
 }
 
 export function Cart({ isOpen, onClose, onCheckout }: CartProps) {
-  const { cartItems, subtotal, itemCount, updateQuantity, removeFromCart, isUpdating, isLoading } = useCart();
+  // ================== "ESPIÃO" ADICIONADO AQUI ==================
+  const cartData = useCart();
+  console.log("DEBUG: Componente Cart recebeu estes dados:", cartData);
+  const { cartItems, subtotal, itemCount, updateQuantity, removeFromCart, isUpdating, isLoading } = cartData;
 
   const formatPrice = (price: string | number) => {
     const numPrice = typeof price === "string" ? parseFloat(price) : price;
@@ -23,7 +26,6 @@ export function Cart({ isOpen, onClose, onCheckout }: CartProps) {
     }).format(numPrice);
   };
 
-  // Verificação de Loading primeiro
   if (isLoading) {
     return (
       <Sheet open={isOpen} onOpenChange={onClose}>
@@ -34,7 +36,6 @@ export function Cart({ isOpen, onClose, onCheckout }: CartProps) {
     );
   }
 
-  // Verificação de Carrinho Vazio
   if (!cartItems || cartItems.length === 0) {
     return (
       <Sheet open={isOpen} onOpenChange={onClose}>
