@@ -1,5 +1,6 @@
 import { authService as supabaseAuthService } from "./supabase";
 import type { AuthUser } from "../types";
+import { type Session } from "@supabase/supabase-js"; // Import que precisamos
 
 export class AuthService {
   async signUp(email: string, password: string, name: string, phone?: string): Promise<AuthUser> {
@@ -30,8 +31,9 @@ export class AuthService {
 
   async signIn(email: string, password: string): Promise<AuthUser> {
     try {
-          // Verificar login com backend
-    const response = await fetch('/api/auth/login', {
+          // ================== CORREÇÃO APLICADA AQUI ==================
+          // Apontando para a rota de login de CLIENTE que criamos
+    const response = await fetch('/api/users/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password })
@@ -43,53 +45,16 @@ export class AuthService {
       const authUser: AuthUser = result.user;
       localStorage.setItem("auth-user", JSON.stringify(authUser));
       return authUser;
+    } else {
+      // Se a API falhar, joga um erro com a mensagem do backend
+      throw new Error(result.message || "Email ou senha incorretos.");
     }
+    // ================================================================
 
-      // Conta admin para demonstração (manter como backup)
-      if (email === "admin@rodriguesmodas.com" && password === "admin123") {
-        const authUser: AuthUser = {
-          id: "admin-123",
-          email,
-          name: "Administrador",
-          phone: "(11) 99999-9999",
-          role: "admin",
-        };
-
-        localStorage.setItem("auth-user", JSON.stringify(authUser));
-        return authUser;
-      }
-
-      // Conta de teste para checkout
-      if (email === "teste@rodriguesmodas.com" && password === "123456") {
-        const authUser: AuthUser = {
-          id: "test-user-id",
-          email,
-          name: "Cliente Teste",
-          phone: "(11) 98765-4321",
-          role: "customer",
-        };
-
-        localStorage.setItem("auth-user", JSON.stringify(authUser));
-        return authUser;
-      }
-
-      const { user, error } = await supabaseAuthService.signIn(email, password);
-
-      if (error) throw error;
-
-      const authUser: AuthUser = {
-        id: user?.id || `user-${Date.now()}`,
-        email: user?.email || email,
-        name: user?.user_metadata?.name || "Cliente",
-        phone: user?.user_metadata?.phone,
-        role: "customer",
-      };
-
-      localStorage.setItem("auth-user", JSON.stringify(authUser));
-      return authUser;
     } catch (error) {
       console.error("Sign in error:", error);
-      throw new Error("Email ou senha incorretos.");
+      // Repassa o erro para o formulário no Header.tsx poder mostrar a mensagem
+      throw error;
     }
   }
 
@@ -142,6 +107,17 @@ export class AuthService {
     const user = this.getCurrentUser();
     return user?.role === "admin";
   }
+
+  // ================== FUNÇÃO ADICIONADA AQUI ==================
+  onAuthStateChange(callback: (event: string, session: Session | null) => void) {
+    const { data: authListener } = supabaseAuthService.onAuthStateChange(
+      (event, session) => {
+        callback(event, session);
+      }
+    );
+    return authListener;
+  }
+  // ============================================================
 }
 
 export const authService = new AuthService();
