@@ -10,8 +10,14 @@ import type { Product } from "@shared/schema";
 export default function Home() {
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
 
+  // ✅ Agora realmente busca os produtos
   const { data: products = [], isLoading } = useQuery<Product[]>({
     queryKey: ["/api/products"],
+    queryFn: async () => {
+      const res = await fetch("/api/products");
+      if (!res.ok) throw new Error("Erro ao carregar produtos");
+      return res.json();
+    },
   });
 
   const categories = [
@@ -22,11 +28,10 @@ export default function Home() {
     { id: "camisolas", name: "Camisolas", icon: ShoppingBag },
   ];
 
-  const filteredProducts = selectedCategory === "all" 
-    ? products 
-    : products.filter(product => product.category === selectedCategory);
-
-  const featuredProducts = products.slice(0, 4);
+  const filteredProducts =
+    selectedCategory === "all"
+      ? products
+      : products.filter((product) => product.category === selectedCategory);
 
   return (
     <div className="min-h-screen">
@@ -40,32 +45,32 @@ export default function Home() {
                 <span className="text-gradient">Qualidade</span>
               </h1>
               <p className="text-lg lg:text-xl text-gray-600 mb-8 leading-relaxed">
-                Descubra nossa coleção exclusiva de lingerie feminina, 
-                com peças confortáveis e elegantes para todas as ocasiões.
+                Descubra nossa coleção exclusiva de lingerie feminina, com peças
+                confortáveis e elegantes para todas as ocasiões.
               </p>
               <div className="flex flex-col sm:flex-row gap-4">
-                <Button 
+                <Button
                   className="btn-primary text-lg px-8 py-4"
                   onClick={() => setSelectedCategory("all")}
                 >
                   Ver Coleção
                 </Button>
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   className="btn-secondary text-lg px-8 py-4"
                 >
                   Sobre Nós
                 </Button>
               </div>
             </div>
-            
+
             <div className="relative animate-slide-up">
               <div className="relative z-10">
                 <img
-  src="/banner.png"
-  alt="Coleção de lingerie elegante"
-  className="rounded-xl shadow-2xl w-full h-auto"
-/>
+                  src="/banner.png"
+                  alt="Coleção de lingerie elegante"
+                  className="rounded-xl shadow-2xl w-full h-auto"
+                />
               </div>
               {/* Decorative elements */}
               <div className="absolute -top-4 -right-4 w-24 h-24 bg-accent/20 rounded-full blur-xl"></div>
@@ -98,7 +103,8 @@ export default function Home() {
                 </div>
                 <h3 className="text-xl font-semibold mb-2">Conforto Absoluto</h3>
                 <p className="text-gray-600">
-                  Lingerie desenvolvida para proporcionar bem-estar durante todo o dia
+                  Lingerie desenvolvida para proporcionar bem-estar durante todo
+                  o dia
                 </p>
               </CardContent>
             </Card>
@@ -127,8 +133,8 @@ export default function Home() {
               Nossa Coleção
             </h2>
             <p className="text-gray-600 max-w-2xl mx-auto text-lg">
-              Peças cuidadosamente selecionadas para valorizar sua feminilidade 
-              e proporcionar máximo conforto.
+              Peças cuidadosamente selecionadas para valorizar sua feminilidade e
+              proporcionar máximo conforto.
             </p>
           </div>
 
@@ -139,10 +145,12 @@ export default function Home() {
               return (
                 <Button
                   key={category.id}
-                  variant={selectedCategory === category.id ? "default" : "outline"}
+                  variant={
+                    selectedCategory === category.id ? "default" : "outline"
+                  }
                   className={`px-6 py-3 rounded-full transition-all duration-200 ${
-                    selectedCategory === category.id 
-                      ? "bg-accent text-accent-foreground hover:bg-accent/90" 
+                    selectedCategory === category.id
+                      ? "bg-accent text-accent-foreground hover:bg-accent/90"
                       : "border-gray-300 hover:border-accent hover:text-accent"
                   }`}
                   onClick={() => setSelectedCategory(category.id)}
@@ -165,7 +173,10 @@ export default function Home() {
                     <div className="h-3 bg-gray-200 rounded mb-3"></div>
                     <div className="flex space-x-2 mb-3">
                       {[...Array(3)].map((_, j) => (
-                        <div key={j} className="w-6 h-6 bg-gray-200 rounded-full"></div>
+                        <div
+                          key={j}
+                          className="w-6 h-6 bg-gray-200 rounded-full"
+                        ></div>
                       ))}
                     </div>
                     <div className="flex justify-between items-center">
@@ -180,7 +191,11 @@ export default function Home() {
             <>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 {filteredProducts.map((product, index) => (
-                  <div key={product.id} className="animate-fade-in" style={{ animationDelay: `${index * 0.1}s` }}>
+                  <div
+                    key={product.id}
+                    className="animate-fade-in"
+                    style={{ animationDelay: `${index * 0.1}s` }}
+                  >
                     <ProductCard product={product} />
                   </div>
                 ))}
@@ -214,19 +229,25 @@ export default function Home() {
       {/* Contact Section */}
       <section className="py-16 bg-accent text-accent-foreground">
         <div className="max-w-4xl mx-auto text-center px-4 sm:px-6 lg:px-8">
-          <h2 className="text-3xl font-bold mb-8">
-            Entre em Contato
-          </h2>
+          <h2 className="text-3xl font-bold mb-8">Entre em Contato</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 text-center">
             <div>
               <h3 className="text-xl font-semibold mb-4">WhatsApp</h3>
-              <a href="https://wa.me/5585991802352" target="_blank" rel="noopener noreferrer" className="text-lg hover:underline">
+              <a
+                href="https://wa.me/5585991802352"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-lg hover:underline"
+              >
                 +55 85 99180-2352
               </a>
             </div>
             <div>
               <h3 className="text-xl font-semibold mb-4">E-mail</h3>
-              <a href="mailto:contact.rodriguesmoda@gmail.com" className="text-lg hover:underline">
+              <a
+                href="mailto:contact.rodriguesmoda@gmail.com"
+                className="text-lg hover:underline"
+              >
                 contact.rodriguesmoda@gmail.com
               </a>
             </div>
@@ -235,20 +256,20 @@ export default function Home() {
               <p className="text-lg">Fortaleza - CE</p>
             </div>
           </div>
-          
+
           <div className="mt-12 text-center">
             <h3 className="text-xl font-semibold mb-6">Redes Sociais</h3>
             <div className="flex justify-center gap-6">
-              <a 
+              <a
                 href="https://www.instagram.com/rodriguesmoda___?igsh=MWk0enZwdGdpcXg4dA=="
                 target="_blank"
-                rel="noopener noreferrer" 
+                rel="noopener noreferrer"
                 className="text-lg hover:underline"
               >
                 Instagram
               </a>
-              <a 
-                href="https://wa.me/5585991802352" 
+              <a
+                href="https://wa.me/5585991802352"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-lg hover:underline"
