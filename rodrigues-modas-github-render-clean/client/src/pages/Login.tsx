@@ -1,6 +1,6 @@
 import React, { useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { signIn } from "@/services/auth"
+import { signIn } from "@/lib/auth"
 import { useToast } from "@/components/ui/use-toast"
 
 const Login: React.FC = () => {
