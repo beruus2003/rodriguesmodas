@@ -12,6 +12,8 @@
   },
   "dependencies": {
     "express": "^4.21.2",
+    "@hookform/resolvers": "^3.3.4",
+"zod": "^3.23.8"
     "http": "0.0.1-security",
     "ws": "^8.18.0",
     "drizzle-orm": "^0.39.1",
