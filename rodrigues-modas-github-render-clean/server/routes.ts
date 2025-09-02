@@ -1,218 +1,198 @@
 import express from "express";
-import { z } from "zod";
 import { storage } from "./storage";
-import {
-  insertUserSchema,
-  insertProductSchema,
-  insertCartItemSchema,
-  insertOrderSchema,
-  insertMpTransactionSchema,
-} from "@shared/schema";
 
-export const app = express();
-app.use(express.json());
+const router = express.Router();
 
-/* ==============================
-   USUÁRIOS
-============================== */
-app.post("/api/users", async (req, res) => {
+// =======================
+// ROTAS DE USUÁRIO
+// =======================
+router.post("/register", async (req, res) => {
   try {
-    const validatedData = insertUserSchema.parse(req.body);
-    const user = await storage.createUser(validatedData);
-    res.status(201).json(user);
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return res.status(400).json({ message: "Dados inválidos", errors: error.errors });
+    const user = await storage.createUser(req.body);
+    res.json(user);
+  } catch (err) {
+    console.error("Erro ao registrar usuário:", err);
+    res.status(500).json({ error: "Erro ao registrar usuário" });
+  }
+});
+
+router.post("/login", async (req, res) => {
+  try {
+    const { email } = req.body;
+    const user = await storage.getUserByEmail(email);
+    if (!user) {
+      return res.status(401).json({ error: "Usuário não encontrado" });
     }
-    res.status(500).json({ message: "Erro ao criar usuário" });
-  }
-});
-
-app.get("/api/users/:email", async (req, res) => {
-  try {
-    const user = await storage.getUserByEmail(req.params.email);
-    if (!user) return res.status(404).json({ message: "Usuário não encontrado" });
     res.json(user);
-  } catch {
-    res.status(500).json({ message: "Erro ao buscar usuário" });
+  } catch (err) {
+    console.error("Erro ao fazer login:", err);
+    res.status(500).json({ error: "Erro ao fazer login" });
   }
 });
 
-app.get("/api/users/id/:id", async (req, res) => {
+router.get("/verify-email/:token", async (req, res) => {
   try {
-    const user = await storage.getUserById(req.params.id);
-    if (!user) return res.status(404).json({ message: "Usuário não encontrado" });
+    const user = await storage.verifyUserEmail(req.params.token);
+    if (!user) {
+      return res.status(400).json({ error: "Token inválido" });
+    }
     res.json(user);
-  } catch {
-    res.status(500).json({ message: "Erro ao buscar usuário" });
+  } catch (err) {
+    console.error("Erro ao verificar e-mail:", err);
+    res.status(500).json({ error: "Erro ao verificar e-mail" });
   }
 });
 
-/* ==============================
-   PRODUTOS
-============================== */
-app.get("/api/products", async (_req, res) => {
+// =======================
+// ROTAS DE PRODUTOS
+// =======================
+router.get("/products", async (_req, res) => {
   try {
     const products = await storage.getProducts();
     res.json(products);
-  } catch {
-    res.status(500).json({ message: "Erro ao buscar produtos" });
+  } catch (err) {
+    console.error("Erro ao buscar produtos:", err);
+    res.status(500).json({ error: "Erro ao buscar produtos" });
   }
 });
 
-app.get("/api/products/:id", async (req, res) => {
+router.get("/products/:id", async (req, res) => {
   try {
     const product = await storage.getProductById(req.params.id);
-    if (!product) return res.status(404).json({ message: "Produto não encontrado" });
+    if (!product) return res.status(404).json({ error: "Produto não encontrado" });
     res.json(product);
-  } catch {
-    res.status(500).json({ message: "Erro ao buscar produto" });
+  } catch (err) {
+    console.error("Erro ao buscar produto:", err);
+    res.status(500).json({ error: "Erro ao buscar produto" });
   }
 });
 
-app.post("/api/products", async (req, res) => {
+// =======================
+// ROTAS DE CARRINHO
+// =======================
+router.get("/cart/:userId", async (req, res) => {
   try {
-    const validatedData = insertProductSchema.parse(req.body);
-    const product = await storage.createProduct(validatedData);
-    res.status(201).json(product);
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return res.status(400).json({ message: "Dados inválidos", errors: error.errors });
-    }
-    res.status(500).json({ message: "Erro ao criar produto" });
+    const items = await storage.getCartItems(req.params.userId);
+    res.json(items);
+  } catch (err) {
+    console.error("Erro ao buscar carrinho:", err);
+    res.status(500).json({ error: "Erro ao buscar carrinho" });
   }
 });
 
-/* ==============================
-   CARRINHO
-============================== */
-app.get("/api/cart/:userId", async (req, res) => {
+router.post("/cart/add", async (req, res) => {
   try {
-    const { userId } = req.params;
-
-    // Confere se usuário existe
-    const user = await storage.getUserById(userId);
-    if (!user) return res.status(404).json({ message: "Usuário não encontrado" });
-
-    const cartItems = await storage.getCartItems(userId);
-    res.json(cartItems);
-  } catch {
-    res.status(500).json({ message: "Erro ao buscar carrinho" });
+    const item = await storage.addToCart(req.body);
+    res.json(item);
+  } catch (err) {
+    console.error("Erro ao adicionar ao carrinho:", err);
+    res.status(500).json({ error: "Erro ao adicionar ao carrinho" });
   }
 });
 
-app.post("/api/cart", async (req, res) => {
+router.put("/cart/update/:id", async (req, res) => {
   try {
-    console.log("📦 Add to cart body:", req.body);
-
-    const body = {
-      ...req.body,
-      quantity: Number(req.body.quantity), // garante número
-    };
-
-    const validatedData = insertCartItemSchema.parse(body);
-    const cartItem = await storage.addToCart(validatedData);
-    res.status(201).json(cartItem);
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return res.status(400).json({ message: "Dados inválidos", errors: error.errors });
-    }
-    console.error("❌ Add to cart error:", error);
-    res.status(500).json({ message: "Erro ao adicionar ao carrinho" });
+    const item = await storage.updateCartItem(req.params.id, req.body.quantity);
+    if (!item) return res.status(404).json({ error: "Item não encontrado" });
+    res.json(item);
+  } catch (err) {
+    console.error("Erro ao atualizar item do carrinho:", err);
+    res.status(500).json({ error: "Erro ao atualizar item do carrinho" });
   }
 });
 
-app.put("/api/cart/:id", async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { quantity } = req.body;
-
-    const updatedItem = await storage.updateCartItem(id, Number(quantity));
-    if (!updatedItem) return res.status(404).json({ message: "Item não encontrado" });
-
-    res.json(updatedItem);
-  } catch {
-    res.status(500).json({ message: "Erro ao atualizar item do carrinho" });
-  }
-});
-
-app.delete("/api/cart/:id", async (req, res) => {
+router.delete("/cart/remove/:id", async (req, res) => {
   try {
     const success = await storage.removeFromCart(req.params.id);
-    if (!success) return res.status(404).json({ message: "Item não encontrado" });
-    res.json({ success: true });
-  } catch {
-    res.status(500).json({ message: "Erro ao remover item do carrinho" });
+    res.json({ success });
+  } catch (err) {
+    console.error("Erro ao remover item do carrinho:", err);
+    res.status(500).json({ error: "Erro ao remover item do carrinho" });
   }
 });
 
-app.delete("/api/cart/user/:userId", async (req, res) => {
+router.delete("/cart/clear/:userId", async (req, res) => {
   try {
     const success = await storage.clearCart(req.params.userId);
-    if (!success) return res.status(404).json({ message: "Carrinho vazio ou usuário não encontrado" });
-    res.json({ success: true });
-  } catch {
-    res.status(500).json({ message: "Erro ao limpar carrinho" });
+    res.json({ success });
+  } catch (err) {
+    console.error("Erro ao limpar carrinho:", err);
+    res.status(500).json({ error: "Erro ao limpar carrinho" });
   }
 });
 
-/* ==============================
-   PEDIDOS
-============================== */
-app.post("/api/orders", async (req, res) => {
+// =======================
+// ROTAS DE PEDIDOS
+// =======================
+router.post("/orders", async (req, res) => {
   try {
-    const validatedData = insertOrderSchema.parse(req.body);
-    const order = await storage.createOrder(validatedData);
-    res.status(201).json(order);
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return res.status(400).json({ message: "Dados inválidos", errors: error.errors });
-    }
-    res.status(500).json({ message: "Erro ao criar pedido" });
+    const order = await storage.createOrder(req.body);
+    res.json(order);
+  } catch (err) {
+    console.error("Erro ao criar pedido:", err);
+    res.status(500).json({ error: "Erro ao criar pedido" });
   }
 });
 
-app.get("/api/orders/user/:userId", async (req, res) => {
+router.get("/orders/:userId", async (req, res) => {
   try {
     const orders = await storage.getOrdersByUser(req.params.userId);
     res.json(orders);
-  } catch {
-    res.status(500).json({ message: "Erro ao buscar pedidos" });
+  } catch (err) {
+    console.error("Erro ao buscar pedidos:", err);
+    res.status(500).json({ error: "Erro ao buscar pedidos" });
   }
 });
 
-app.get("/api/orders/:id", async (req, res) => {
+router.put("/orders/:id/status", async (req, res) => {
   try {
-    const order = await storage.getOrderById(req.params.id);
-    if (!order) return res.status(404).json({ message: "Pedido não encontrado" });
+    const order = await storage.updateOrderStatus(req.params.id, req.body.status);
+    if (!order) return res.status(404).json({ error: "Pedido não encontrado" });
     res.json(order);
-  } catch {
-    res.status(500).json({ message: "Erro ao buscar pedido" });
+  } catch (err) {
+    console.error("Erro ao atualizar pedido:", err);
+    res.status(500).json({ error: "Erro ao atualizar pedido" });
   }
 });
 
-/* ==============================
-   TRANSAÇÕES MERCADO PAGO
-============================== */
-app.post("/api/mp-transactions", async (req, res) => {
+// =======================
+// ROTAS DE TRANSAÇÕES (MERCADO PAGO)
+// =======================
+router.post("/mp/transactions", async (req, res) => {
   try {
-    const validatedData = insertMpTransactionSchema.parse(req.body);
-    const tx = await storage.createMpTransaction(validatedData);
-    res.status(201).json(tx);
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return res.status(400).json({ message: "Dados inválidos", errors: error.errors });
-    }
-    res.status(500).json({ message: "Erro ao criar transação" });
+    const tx = await storage.createMpTransaction(req.body);
+    res.json(tx);
+  } catch (err) {
+    console.error("Erro ao criar transação:", err);
+    res.status(500).json({ error: "Erro ao criar transação" });
   }
 });
 
-app.get("/api/mp-transactions/:paymentId", async (req, res) => {
+router.get("/mp/transactions/:paymentId", async (req, res) => {
   try {
     const tx = await storage.getMpTransactionByPaymentId(req.params.paymentId);
-    if (!tx) return res.status(404).json({ message: "Transação não encontrada" });
+    if (!tx) return res.status(404).json({ error: "Transação não encontrada" });
     res.json(tx);
-  } catch {
-    res.status(500).json({ message: "Erro ao buscar transação" });
+  } catch (err) {
+    console.error("Erro ao buscar transação:", err);
+    res.status(500).json({ error: "Erro ao buscar transação" });
   }
 });
+
+router.put("/mp/transactions/:paymentId/status", async (req, res) => {
+  try {
+    const tx = await storage.updateMpTransactionStatus(req.params.paymentId, req.body.status);
+    if (!tx) return res.status(404).json({ error: "Transação não encontrada" });
+    res.json(tx);
+  } catch (err) {
+    console.error("Erro ao atualizar transação:", err);
+    res.status(500).json({ error: "Erro ao atualizar transação" });
+  }
+});
+
+// =======================
+// EXPORTAR PARA O SERVER
+// =======================
+export function registerRoutes(app: any) {
+  app.use("/api", router);
+}
