@@ -69,3 +69,6 @@ export const authService = {
     localStorage.removeItem("auth-user");
   },
 };
+
+// 👇 isso expõe a função para o Login.tsx
+export const signIn = authService.signIn;
