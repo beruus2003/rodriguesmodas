@@ -3,10 +3,13 @@ import { eq } from "drizzle-orm";
 import {
   users as usersTable,
   cartItems as cartItemsTable,
+  products as productsTable,
   type InsertUser,
   type InsertCartItem,
+  type InsertProduct,
   type User,
   type CartItem,
+  type Product,
 } from "@shared/schema";
 
 export const storage = {
@@ -53,5 +56,30 @@ export const storage = {
   async clearCart(userId: string) {
     await db.delete(cartItemsTable).where(eq(cartItemsTable.userId, userId));
     return true;
+  },
+
+  // ========== PRODUCTS ==========
+  async createProduct(product: InsertProduct): Promise<Product> {
+    const created = await db.insert(productsTable).values(product).returning();
+    return created[0];
+  },
+
+  async getProducts(): Promise<Product[]> {
+    return db.select().from(productsTable);
+  },
+
+  async getProductById(id: string): Promise<Product | undefined> {
+    const rows = await db.select().from(productsTable).where(eq(productsTable.id, id));
+    return rows[0];
+  },
+
+  async updateProduct(id: string, product: Partial<InsertProduct>): Promise<Product | undefined> {
+    const updated = await db.update(productsTable).set(product).where(eq(productsTable.id, id)).returning();
+    return updated[0];
+  },
+
+  async deleteProduct(id: string): Promise<boolean> {
+    const deleted = await db.delete(productsTable).where(eq(productsTable.id, id)).returning();
+    return deleted.length > 0;
   },
 };
