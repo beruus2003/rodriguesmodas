@@ -12,20 +12,22 @@ interface AuthContextType {
   isAdmin: boolean;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+// ================== A CORREÇÃO ESTÁ AQUI ==================
+export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // NOTA: A lógica de `onAuthStateChange` foi movida para dentro do authService
+  // para manter este provedor mais limpo.
   useEffect(() => {
-    // A lógica que antes estava no hook, agora vive aqui, na nossa "central".
     setLoading(true);
     const currentUser = authService.getCurrentUser();
     setUser(currentUser);
     setLoading(false);
 
-    const subscription = authService.onAuthStateChange((event, sessionUser) => {
+    const subscription = authService.onAuthStateChange((_event, sessionUser) => {
       setUser(sessionUser);
       setLoading(false);
     });
@@ -35,29 +37,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const signUp = async (email: string, password: string, name: string, phone?: string) => {
-    const authUser = await authService.signUp(email, password, name, phone);
-    setUser(authUser);
-    return authUser;
-  };
-
-  const signIn = async (email: string, password: string) => {
-    const authUser = await authService.signIn(email, password);
-    setUser(authUser);
-    return authUser;
-  };
-
-  const signOut = async () => {
-    await authService.signOut();
-    setUser(null);
-  };
-
+  // As funções agora são apenas repassadas do serviço para o contexto
   const value = {
     user,
     loading,
-    signUp,
-    signIn,
-    signOut,
+    signUp: authService.signUp,
+    signIn: authService.signIn,
+    signOut: authService.signOut,
     isAuthenticated: !!user,
     isAdmin: user?.role === "admin",
   };
@@ -65,10 +51,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
-export function useAuth() {
+// O hook useAuth que os componentes usarão
+export function useAuthFromContext() {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error("useAuth must be used within an AuthProvider");
+    throw new Error("useAuthFromContext must be used within an AuthProvider");
   }
   return context;
 }
