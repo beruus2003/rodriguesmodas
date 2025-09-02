@@ -168,3 +168,4 @@ export class DrizzleStorage {
     return result[0];
   }
 }
+export const storage = new DrizzleStorage();
