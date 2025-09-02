@@ -75,7 +75,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // ======================= NOVA ROTA DE LOGIN DE CLIENTE =======================
   app.post("/api/users/login", async (req, res) => {
     try {
         const { email, password } = z.object({
@@ -83,24 +82,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
             password: z.string(),
         }).parse(req.body);
 
-        // 1. Encontrar o usuário pelo e-mail
         const user = await storage.getUserByEmail(email);
         if (!user || !user.password) {
             return res.status(401).json({ message: "E-mail ou senha inválidos." });
         }
 
-        // 2. Verificar se a conta foi ativada
         if (!user.emailVerified) {
             return res.status(403).json({ message: "Sua conta ainda não foi verificada. Por favor, cheque seu e-mail." });
         }
 
-        // 3. Comparar a senha enviada com a senha criptografada no banco
         const isPasswordValid = await bcrypt.compare(password, user.password);
         if (!isPasswordValid) {
             return res.status(401).json({ message: "E-mail ou senha inválidos." });
         }
-
-        // 4. Se tudo estiver certo, retorna os dados do usuário (sem a senha)
+        
         const { password: _, ...userWithoutPassword } = user;
         res.json({ success: true, user: userWithoutPassword });
 
@@ -112,7 +107,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         res.status(500).json({ message: "Erro interno do servidor" });
     }
   });
-  // ======================= FIM DA NOVA ROTA =======================
   
   app.post("/api/auth/login", async (req, res) => {
     try {
@@ -232,24 +226,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Carrinho
-  app.get("/api/cart/:userId", async (req, res) => {
+  // ====================== ROTAS DO CARRINHO ======================
+  // Foi necessário criar um Router para o carrinho para organizar as rotas
+  const cartRouter = express.Router();
+
+  // Buscar itens do carrinho de um usuário
+  cartRouter.get("/:userId", async (req, res) => {
     try {
+      // NOTE: Sua implementação antiga fazia uma busca extra. A nova `getCartItems` já faz isso.
       const cartItems = await storage.getCartItems(req.params.userId);
-      const enrichedItems = await Promise.all(
-        cartItems.map(async (item) => {
-          const product = await storage.getProduct(item.productId);
-          return { ...item, product };
-        })
-      );
-      res.json(enrichedItems);
+      res.json(cartItems);
     } catch (error) {
       console.error('Get cart error:', error);
       res.status(500).json({ message: "Erro ao buscar carrinho" });
     }
   });
 
-  app.post("/api/cart", async (req, res) => {
+  // Adicionar item ao carrinho
+  cartRouter.post("/", async (req, res) => {
     try {
       const validatedData = insertCartItemSchema.parse(req.body);
       const cartItem = await storage.addToCart(validatedData);
@@ -263,23 +257,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/cart/:id", async (req, res) => {
+  // ATUALIZAÇÃO AQUI: Substituindo as rotas antigas pelas novas
+  
+  // Rota para ATUALIZAR a quantidade de um item
+  cartRouter.patch("/:itemId", async (req, res) => {
     try {
+      const { itemId } = req.params;
       const { quantity } = req.body;
-      const cartItem = await storage.updateCartItem(req.params.id, quantity);
-      if (!cartItem) {
+      if (quantity <= 0) {
+        const item = await storage.removeFromCart(itemId);
+        return res.json(item);
+      }
+      const item = await storage.updateCartItem(itemId, quantity);
+      if (!item) {
         return res.status(404).json({ message: "Item não encontrado" });
       }
-      res.json(cartItem);
+      res.json(item);
     } catch (error) {
       console.error('Update cart error:', error);
       res.status(500).json({ message: "Erro ao atualizar item" });
     }
   });
 
-  app.delete("/api/cart/:id", async (req, res) => {
+  // Rota para REMOVER um item do carrinho
+  cartRouter.delete("/:itemId", async (req, res) => {
     try {
-      const success = await storage.removeFromCart(req.params.id);
+      const { itemId } = req.params;
+      const success = await storage.removeFromCart(itemId);
       if (!success) {
         return res.status(404).json({ message: "Item não encontrado" });
       }
@@ -290,7 +294,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/cart/user/:userId", async (req, res) => {
+  // Rota para limpar o carrinho (mantida)
+  cartRouter.delete("/user/:userId", async (req, res) => {
     try {
       await storage.clearCart(req.params.userId);
       res.json({ message: "Carrinho limpo com sucesso" });
@@ -299,6 +304,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Erro ao limpar carrinho" });
     }
   });
+  
+  // Linha que registra todas as rotas de carrinho no caminho /api/cart
+  app.use('/api/cart', cartRouter);
+  // ======================= FIM DAS ATUALIZAÇÕES =======================
+
 
   // Pedidos
   app.get("/api/orders", async (req, res) => {
