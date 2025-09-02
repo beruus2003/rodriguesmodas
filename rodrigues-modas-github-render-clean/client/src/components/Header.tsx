@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
-import { ShoppingCart, User, Menu } from "lucide-react";
+import { ShoppingCart, User, Menu, Loader2 } from "lucide-react"; // 1. Adicionado o ícone de Loading
 import { Logo } from "./Logo";
 import { useCart } from "../hooks/use-cart";
 import { useAuth } from "../hooks/use-auth";
+import { useToast } from "@/hooks/use-toast"; // 2. Adicionado o hook de toast
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import {
@@ -35,22 +36,42 @@ export function Header({ onCartOpen }: HeaderProps) {
     { name: "Contato", href: "/contato" },
   ];
 
-  // --- ALTERAÇÃO 1: Mudei o nome para refletir que agora é para TODOS os dispositivos ---
   const AuthSection = () => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    // 3. Adicionado estado de loading e erro para o formulário
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const { toast } = useToast();
 
     const handleCustomerLogin = async (e: React.FormEvent) => {
       e.preventDefault();
+      setIsLoading(true);
+      setError(null);
+
       if (signIn) {
-        try { await signIn(email, password); } catch (error) { console.error("Falha no login do cliente:", error); }
+        try {
+          await signIn(email, password);
+          // O hook useAuth vai atualizar o 'user', e o componente vai re-renderizar para a visão de logado
+          // Não precisamos fazer mais nada aqui em caso de sucesso
+        } catch (err) {
+          const errorMessage = err instanceof Error ? err.message : "Ocorreu um erro inesperado.";
+          setError(errorMessage); // Mostra o erro no formulário
+          toast({ // Mostra o erro na notificação
+            title: "Falha no Login",
+            description: errorMessage,
+            variant: "destructive",
+          });
+          console.error("Falha no login do cliente:", err);
+        } finally {
+          setIsLoading(false); // Garante que o loading para, mesmo com erro
+        }
       }
     };
 
     return (
-      <DropdownMenu>
+      <DropdownMenu onOpenChange={() => setError(null)}> {/* Limpa o erro ao fechar/abrir o menu */}
         <DropdownMenuTrigger asChild>
-          {/* --- AQUI ESTÁ A MUDANÇA PRINCIPAL: Removi 'hidden md:flex' para o botão aparecer sempre --- */}
           <Button variant="ghost" size="icon" className="flex hover:bg-gray-100">
             <User className="h-5 w-5 text-gray-700" />
           </Button>
@@ -69,9 +90,15 @@ export function Header({ onCartOpen }: HeaderProps) {
               <DropdownMenuLabel>Acesse sua conta</DropdownMenuLabel>
               <DropdownMenuSeparator />
               <form onSubmit={handleCustomerLogin} className="space-y-4">
-                <div className="space-y-2"><Label htmlFor="email-login">Email</Label><Input id="email-login" type="email" placeholder="voce@email.com" value={email} onChange={(e) => setEmail(e.target.value)} /></div>
-                <div className="space-y-2"><Label htmlFor="password-login">Senha</Label><Input id="password-login" type="password" placeholder="******" value={password} onChange={(e) => setPassword(e.target.value)} /></div>
-                <Button type="submit" className="w-full">Entrar</Button>
+                <div className="space-y-2"><Label htmlFor="email-login">Email</Label><Input id="email-login" type="email" placeholder="voce@email.com" value={email} onChange={(e) => setEmail(e.target.value)} disabled={isLoading} /></div>
+                <div className="space-y-2"><Label htmlFor="password-login">Senha</Label><Input id="password-login" type="password" placeholder="******" value={password} onChange={(e) => setPassword(e.target.value)} disabled={isLoading} /></div>
+                
+                {/* 4. Mensagem de erro e botão com estado de loading */}
+                {error && <p className="text-sm text-destructive">{error}</p>}
+                
+                <Button type="submit" className="w-full" disabled={isLoading}>
+                  {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Entrar"}
+                </Button>
               </form>
               <DropdownMenuSeparator className="my-4"/>
               <div className="text-center text-sm text-muted-foreground">Não tem uma conta?{' '}<Link href="/cadastro" className="text-primary hover:underline">Cadastre-se</Link></div>
@@ -82,7 +109,6 @@ export function Header({ onCartOpen }: HeaderProps) {
     );
   };
   
-  // --- ALTERAÇÃO 2: Simplifiquei o Menu Mobile para não ter mais login de cliente ---
   const MobileNav = () => (
     <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
       <SheetTrigger asChild>
@@ -97,16 +123,8 @@ export function Header({ onCartOpen }: HeaderProps) {
             ))}
           </div>
           <div className="mt-auto border-t">
-            {/* Agora a única opção de login aqui é a do Dono, SE ninguém estiver logado */}
-            {!user && (
-              <div className="p-4">
-                <Button onClick={() => { setAdminAuthOpen(true); setMobileMenuOpen(false); }} className="w-full" variant="link">Acesso do Dono</Button>
-              </div>
-            )}
-            {/* Se o user estiver logado (qualquer user), o menu apenas mostra um botão de Sair */}
-            {user && (
-                 <div className="p-4"><Button onClick={signOut} className="w-full text-destructive" variant="ghost">Sair</Button></div>
-            )}
+            {!user && (<div className="p-4"><Button onClick={() => { setAdminAuthOpen(true); setMobileMenuOpen(false); }} className="w-full" variant="link">Acesso do Dono</Button></div>)}
+            {user && (<div className="p-4"><Button onClick={signOut} className="w-full text-destructive" variant="ghost">Sair</Button></div>)}
           </div>
         </div>
       </SheetContent>
