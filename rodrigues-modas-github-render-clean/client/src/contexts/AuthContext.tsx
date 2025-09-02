@@ -5,33 +5,29 @@ import type { AuthUser } from "../types";
 interface AuthContextType {
   user: AuthUser | null;
   loading: boolean;
-  signIn: typeof authService.signIn;
-  signOut: typeof authService.signOut;
+  signIn: (email: string, password: string) => Promise<AuthUser>;
+  signOut: () => Promise<void>;
   isAuthenticated: boolean;
   isAdmin: boolean;
 }
 
-export const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // 1. Ao carregar a aplicação, verifica se já existe um usuário no localStorage
+    // Ao carregar o site, ele pega o usuário que já pode estar salvo no localStorage
     const currentUser = authService.getCurrentUser();
     setUser(currentUser);
     setLoading(false);
 
-    // 2. Ouve por eventos do Supabase (ex: logout em outra aba) para manter a sincronia
-    const authListener = authService.onAuthStateChange((event, session) => {
+    // Ouve por eventos para manter a sincronia entre abas
+    const authListener = authService.onAuthStateChange((event) => {
       if (event === "SIGNED_OUT") {
-        // Se o Supabase deslogou, limpamos o nosso estado também
         setUser(null);
-        localStorage.removeItem("auth-user"); // Garante a limpeza
-      } else if (event === "SIGNED_IN") {
-        // Se um login aconteceu em outra aba, recarregamos do nosso localStorage
-        // que o auth.ts do Supabase deve ter atualizado.
+      } else if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
         setUser(authService.getCurrentUser());
       }
     });
@@ -41,22 +37,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  // Esta função agora chama o seu auth.ts e ATUALIZA o estado central
+  // Funções que alteram o estado
   const signIn = async (email: string, password: string) => {
-    try {
-      const loggedInUser = await authService.signIn(email, password);
-      setUser(loggedInUser); // <-- A MÁGICA: Avisa toda a aplicação sobre o novo usuário!
-      return loggedInUser;
-    } catch (error) {
-      setUser(null); // Garante que o estado fique nulo em caso de falha
-      throw error; // Repassa o erro para o formulário poder exibi-lo
-    }
+    const loggedInUser = await authService.signIn(email, password);
+    setUser(loggedInUser); // Avisa a todos os componentes sobre o novo usuário
+    return loggedInUser;
   };
 
-  // Esta função agora chama o seu auth.ts e ATUALIZA o estado central
   const signOut = async () => {
     await authService.signOut();
-    setUser(null); // <-- A MÁGICA: Avisa toda a aplicação que o usuário saiu!
+    setUser(null); // Avisa a todos que o usuário saiu
   };
 
   const value = {
