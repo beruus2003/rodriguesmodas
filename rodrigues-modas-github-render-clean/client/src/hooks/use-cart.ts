@@ -5,7 +5,6 @@ import type { CartItem, CartItemWithProduct, Product } from "../types/index";
 import { useAuth } from "./use-auth";
 import { useToast } from "./use-toast";
 
-// Helper para ler o carrinho do localStorage de forma segura
 const getGuestCartFromStorage = (): CartItemWithProduct[] => {
   if (typeof window === 'undefined') return [];
   try {
@@ -13,7 +12,7 @@ const getGuestCartFromStorage = (): CartItemWithProduct[] => {
     return savedCart ? JSON.parse(savedCart) : [];
   } catch (error) {
     console.error("Erro ao ler o carrinho do localStorage:", error);
-    window.localStorage.removeItem('guest-cart'); // Limpa dados corrompidos
+    window.localStorage.removeItem('guest-cart');
     return [];
   }
 };
@@ -22,34 +21,33 @@ export function useCart() {
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const isMerging = useRef(false); // Flag para controlar a fusão
+  const isMerging = useRef(false);
 
-  // Estado para o carrinho de visitante
   const [guestCart, setGuestCart] = useState<CartItemWithProduct[]>(getGuestCartFromStorage);
 
-  // Efeito para salvar o carrinho de visitante no localStorage
   useEffect(() => {
     if (!user) {
       window.localStorage.setItem('guest-cart', JSON.stringify(guestCart));
     }
   }, [guestCart, user]);
+  
+  const queryKey = ["cart", user?.id];
 
-  // Busca o carrinho do banco de dados APENAS se o usuário estiver logado
   const {
     data: dbCartItems = [],
     isLoading,
-    error,
   } = useQuery<CartItemWithProduct[]>({
-    queryKey: ["cart", user?.id],
+    queryKey,
     queryFn: async () => {
       const res = await apiRequest("GET", `/api/cart/${user!.id}`);
       if (!res.ok) throw new Error("Falha ao buscar o carrinho");
       return res.json();
     },
-    enabled: !!user, // Query só é executada se 'user' existir
+    enabled: !!user,
   });
 
-  // Mutação para adicionar itens (funciona para a fusão também)
+  const cartItems = user ? dbCartItems : guestCart;
+
   const addToCartMutation = useMutation({
     mutationFn: async (item: {
       product: Product;
@@ -57,7 +55,12 @@ export function useCart() {
       selectedColor: string;
       selectedSize: string;
     }) => {
-      if (!user) { // Lógica de visitante
+      if (user) {
+        return apiRequest("POST", "/api/cart", {
+          userId: user.id, productId: item.product.id, quantity: item.quantity,
+          selectedColor: item.selectedColor, selectedSize: item.selectedSize,
+        });
+      } else {
         setGuestCart(currentCart => {
           const existingItemIndex = currentCart.findIndex(
             ci => ci.product.id === item.product.id && ci.selectedColor === item.selectedColor && ci.selectedSize === item.selectedSize
@@ -77,16 +80,9 @@ export function useCart() {
         });
         return Promise.resolve();
       }
-      
-      // Lógica de usuário logado
-      return apiRequest("POST", "/api/cart", {
-        userId: user.id, productId: item.product.id, quantity: item.quantity,
-        selectedColor: item.selectedColor, selectedSize: item.selectedSize,
-      });
     },
-    onSuccess: (data, variables, context) => {
-      queryClient.invalidateQueries({ queryKey: ["cart", user?.id] });
-      // Só mostra o toast se não estiver no processo de fusão silenciosa
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey });
       if (!isMerging.current) {
         toast({ title: "Produto adicionado!", description: "Seu item já está no carrinho." });
       }
@@ -98,42 +94,68 @@ export function useCart() {
       console.error("Erro ao adicionar ao carrinho:", err);
     },
   });
+  
+  // ======================= NOVAS FUNÇÕES IMPLEMENTADAS AQUI =======================
 
-  // EFEITO DE FUSÃO: Roda quando o usuário faz login
+  const updateQuantityMutation = useMutation({
+    mutationFn: async ({ itemId, quantity }: { itemId: string, quantity: number }) => {
+      if (user) {
+        return apiRequest("PATCH", `/api/cart/${itemId}`, { quantity });
+      } else {
+        setGuestCart(currentCart =>
+          currentCart
+            .map(item => item.id === itemId ? { ...item, quantity } : item)
+            .filter(item => item.quantity > 0) // Remove o item se a quantidade for 0
+        );
+        return Promise.resolve();
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey });
+      toast({ title: "Carrinho atualizado" });
+    },
+    onError: (err) => {
+      console.error("Erro ao atualizar quantidade:", err);
+      toast({ title: "Erro", description: "Não foi possível atualizar o item.", variant: "destructive" });
+    },
+  });
+
+  const removeFromCartMutation = useMutation({
+    mutationFn: async (itemId: string) => {
+      if (user) {
+        return apiRequest("DELETE", `/api/cart/${itemId}`);
+      } else {
+        setGuestCart(currentCart => currentCart.filter(item => item.id !== itemId));
+        return Promise.resolve();
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey });
+      toast({ title: "Item removido" });
+    },
+    onError: (err) => {
+      console.error("Erro ao remover item:", err);
+      toast({ title: "Erro", description: "Não foi possível remover o item.", variant: "destructive" });
+    },
+  });
+
+  // ==============================================================================
+
   useEffect(() => {
     const guestCartOnLogin = getGuestCartFromStorage();
     if (user && guestCartOnLogin.length > 0) {
-      isMerging.current = true; // Ativa a flag para não mostrar múltiplos toasts
-      
-      // Promessa para adicionar todos os itens do carrinho de visitante à conta do usuário
-      const mergePromises = guestCartOnLogin.map(item => 
-        addToCartMutation.mutateAsync({
-          product: item.product,
-          quantity: item.quantity,
-          selectedColor: item.selectedColor,
-          selectedSize: item.selectedSize
-        })
-      );
-
+      isMerging.current = true;
+      const mergePromises = guestCartOnLogin.map(item => addToCartMutation.mutateAsync(item));
       Promise.all(mergePromises)
         .then(() => {
-          console.log("Carrinho de visitante fundido com sucesso!");
-          setGuestCart([]); // Limpa o estado local
-          window.localStorage.removeItem('guest-cart'); // Limpa o armazenamento local
-          queryClient.invalidateQueries({ queryKey: ["cart", user.id] }); // Atualiza a busca do carrinho final
+          setGuestCart([]);
+          window.localStorage.removeItem('guest-cart');
+          queryClient.invalidateQueries({ queryKey });
         })
-        .catch(err => {
-          console.error("Erro ao fundir carrinhos:", err);
-          toast({ title: "Erro", description: "Não foi possível mover os itens do seu carrinho de visitante.", variant: "destructive" });
-        })
-        .finally(() => {
-          isMerging.current = false; // Desativa a flag
-        });
+        .catch(err => console.error("Erro ao fundir carrinhos:", err))
+        .finally(() => { isMerging.current = false; });
     }
-  }, [user]); // Dependência: Roda sempre que o 'user' mudar
-
-  // O carrinho a ser exibido é o do banco (se logado) ou do localStorage (se visitante)
-  const cartItems = user ? dbCartItems : guestCart;
+  }, [user]);
 
   const subtotal = cartItems.reduce((total, item) => {
     const price = typeof item.product.price === 'string' ? parseFloat(item.product.price) : item.product.price;
@@ -142,9 +164,13 @@ export function useCart() {
   const itemCount = cartItems.reduce((total, item) => total + item.quantity, 0);
 
   return {
-    cartItems, subtotal, itemCount, isLoading, error,
-    isUpdating: addToCartMutation.isPending,
+    cartItems,
+    subtotal,
+    itemCount,
+    isLoading,
+    isUpdating: addToCartMutation.isPending || updateQuantityMutation.isPending || removeFromCartMutation.isPending,
     addToCart: addToCartMutation.mutate,
-    // (As outras funções como removeFromCart precisam ser implementadas com a mesma lógica if/else)
+    updateQuantity: updateQuantityMutation.mutate,
+    removeFromCart: removeFromCartMutation.mutate,
   };
 }
