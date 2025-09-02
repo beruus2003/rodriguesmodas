@@ -1,93 +1,84 @@
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-import { useAuth } from "@/hooks/use-auth";
-import { useToast } from "@/components/ui/use-toast";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "@/components/ui/form";
-import { useState } from "react";
-import { useLocation } from "wouter";
+import React, { useState } from "react"
+import { useNavigate } from "react-router-dom"
+import { signIn } from "@/services/auth"
+import { useToast } from "@/components/ui/use-toast"
 
-const loginSchema = z.object({
-  email: z.string().email({ message: "Digite um e-mail válido" }),
-  password: z.string().min(6, { message: "A senha deve ter pelo menos 6 caracteres" }),
-});
+const Login: React.FC = () => {
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
+  const [isLoading, setIsLoading] = useState(false)
+  const navigate = useNavigate()
+  const { addToast } = useToast()
 
-type LoginFormData = z.infer<typeof loginSchema>;
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setIsLoading(true)
 
-export default function Login() {
-  const { signIn } = useAuth();
-  const { toast } = useToast();
-  const [, setLocation] = useLocation();
-  const [isLoading, setIsLoading] = useState(false);
-
-  const form = useForm<LoginFormData>({
-    resolver: zodResolver(loginSchema),
-    defaultValues: {
-      email: "",
-      password: "",
-    },
-  });
-
-  const handleLogin = async ({ email, password }: LoginFormData) => {
-    setIsLoading(true);
     try {
-      const user = await signIn(email, password);
-      toast({
-        title: "Login realizado",
-        description: `Bem-vinda de volta, ${user?.name || "cliente"}!`,
-      });
-      setLocation("/");
-    } catch (error: any) {
-      toast({
-        title: "Erro no Login",
-        description: error?.message || "Não foi possível realizar o login.",
+      const response = await signIn(email, password)
+
+      if (response?.user) {
+        addToast({
+          title: "Login realizado",
+          description: `Bem-vindo, ${response.user.name || "usuário"}!`,
+        })
+
+        // Se for admin
+        if (response.user.role === "admin") {
+          navigate("/admin")
+        } else {
+          navigate("/")
+        }
+      } else {
+        addToast({
+          title: "Erro no login",
+          description: "Credenciais inválidas.",
+          variant: "destructive",
+        })
+      }
+    } catch (err: any) {
+      addToast({
+        title: "Erro no servidor",
+        description: err.message || "Não foi possível realizar o login.",
         variant: "destructive",
-      });
+      })
     } finally {
-      setIsLoading(false);
+      setIsLoading(false)
     }
-  };
+  }
 
   return (
-    <div className="flex justify-center items-center min-h-screen">
-      <div className="w-full max-w-md bg-white p-6 rounded-lg shadow-md">
-        <h2 className="text-2xl font-bold mb-6">Entrar</h2>
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(handleLogin)} className="space-y-4">
-            <FormField
-              control={form.control}
-              name="email"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Email</FormLabel>
-                  <FormControl>
-                    <Input type="email" placeholder="seuemail@exemplo.com" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="password"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Senha</FormLabel>
-                  <FormControl>
-                    <Input type="password" placeholder="••••••••" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading ? "Entrando..." : "Entrar"}
-            </Button>
-          </form>
-        </Form>
+    <div className="flex items-center justify-center min-h-screen bg-gray-100">
+      <div className="w-full max-w-md bg-white p-8 rounded shadow">
+        <h1 className="text-2xl font-bold mb-6 text-center">Login</h1>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <input
+            type="email"
+            placeholder="Email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="w-full px-4 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+            required
+          />
+          <input
+            type="password"
+            placeholder="Senha"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="w-full px-4 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+            required
+          />
+          <button
+            type="submit"
+            disabled={isLoading}
+            className="w-full py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition disabled:opacity-50"
+          >
+            {isLoading ? "Entrando..." : "Entrar"}
+          </button>
+        </form>
       </div>
     </div>
-  );
+  )
 }
+
+export default Login
