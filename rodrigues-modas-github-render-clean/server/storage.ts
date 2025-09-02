@@ -14,11 +14,11 @@ import {
   type MpTransaction,
   type InsertMpTransaction
 } from "@shared/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import type { IStorage } from './storage.interface';
 
 class DrizzleStorage implements IStorage {
-  // ... (funções de User e Product continuam iguais)
+  // --- Funções de User e Product (sem alterações) ---
   async getUserByEmail(email: string): Promise<User | undefined> { return await db.query.users.findFirst({ where: eq(usersTable.email, email.toLowerCase()) }); }
   async getUserByVerificationToken(token: string): Promise<User | undefined> { return await db.query.users.findFirst({ where: eq(usersTable.verificationToken, token) }); }
   async createUser(user: InsertUser): Promise<User> { const result = await db.insert(usersTable).values({ ...user, email: user.email.toLowerCase() }).returning(); return result[0]; }
@@ -30,15 +30,12 @@ class DrizzleStorage implements IStorage {
   async updateProduct(id: string, product: Partial<Product>): Promise<Product | undefined> { const result = await db.update(productsTable).set(product).where(eq(productsTable.id, id)).returning(); return result[0]; }
   async deleteProduct(id: string): Promise<boolean> { const result = await db.delete(productsTable).where(eq(productsTable.id, id)).returning({ id: productsTable.id }); return result.length > 0; }
 
-  // ======================= FUNÇÕES DO CARRINHO CORRIGIDAS DE VEZ =======================
+  // --- Funções do Carrinho ---
   
   async getCartItems(userId: string): Promise<(CartItem & { product: Product })[]> {
-    // CORREÇÃO: Busca direto em 'cartItems' (como deveria ser) E usa a relação 'with'
     const items = await db.query.cartItems.findMany({
         where: eq(cartItemsTable.userId, userId),
-        with: {
-            product: true 
-        },
+        with: { product: true },
         orderBy: (cartItems, { asc }) => [asc(cartItems.createdAt)],
     });
     return items;
@@ -66,12 +63,28 @@ class DrizzleStorage implements IStorage {
     }
   }
 
+  // ======================= NOVAS FUNÇÕES IMPLEMENTADAS AQUI =======================
+  
+  async updateCartItem(itemId: string, quantity: number): Promise<CartItem | undefined> {
+    const updatedItems = await db.update(cartItemsTable)
+      .set({ quantity })
+      .where(eq(cartItemsTable.id, itemId))
+      .returning();
+    return updatedItems[0];
+  }
+
+  async removeFromCart(itemId: string): Promise<CartItem | undefined> {
+    const removedItems = await db.delete(cartItemsTable)
+      .where(eq(cartItemsTable.id, itemId))
+      .returning();
+    return removedItems[0];
+  }
+
+  // ==============================================================================
+
   // --- MÉTODOS AINDA NÃO IMPLEMENTADOS ---
-  // ... (o resto continua igual)
   async getUser(id: string) { throw new Error("Method not implemented."); }
   async updateUser(id: string, user: any) { throw new Error("Method not implemented."); }
-  async updateCartItem(id: string, quantity: number) { throw new Error("Method not implemented."); }
-  async removeFromCart(id: string) { throw new Error("Method not implemented."); }
   async clearCart(userId: string) { throw new Error("Method not implemented."); }
   async getOrders() { throw new Error("Method not implemented."); }
   async getOrdersByUser(userId: string) { throw new Error("Method not implemented."); }
