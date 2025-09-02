@@ -3,9 +3,9 @@ import type { AuthUser } from "../types";
 import { type Session } from "@supabase/supabase-js";
 
 export class AuthService {
+  // Sua função de login de cliente. Apontei para a rota correta que criamos.
   async signIn(email: string, password: string): Promise<AuthUser> {
     try {
-      // Apontando para a sua rota de login de cliente. Está correto.
       const response = await fetch('/api/users/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -16,11 +16,9 @@ export class AuthService {
     
       if (result.success && result.user) {
         const authUser: AuthUser = result.user;
-        // Salva o usuário no localStorage para a sessão persistir
         localStorage.setItem("auth-user", JSON.stringify(authUser));
         return authUser;
       } else {
-        // Joga um erro com a mensagem do backend
         throw new Error(result.message || "Email ou senha incorretos.");
       }
     } catch (error) {
@@ -29,18 +27,18 @@ export class AuthService {
     }
   }
 
+  // Sua função de logout.
   async signOut(): Promise<void> {
     try {
       await supabaseAuthService.signOut();
     } catch (error) {
       console.error("Sign out error:", error);
     } finally {
-      // Limpa o nosso localStorage. Crucial para o logout funcionar.
       localStorage.removeItem("auth-user");
     }
   }
 
-  // Pega o usuário do localStorage. Perfeito.
+  // Sua função para pegar o usuário do localStorage. Perfeita.
   getCurrentUser(): AuthUser | null {
     try {
       const userData = localStorage.getItem("auth-user");
@@ -50,7 +48,7 @@ export class AuthService {
     }
   }
 
-  // Ouve por eventos do Supabase para manter a sincronia entre abas.
+  // A função para ouvir mudanças externas do Supabase.
   onAuthStateChange(callback: (event: string, session: Session | null) => void) {
     const { data: authListener } = supabaseAuthService.onAuthStateChange(
       (event, session) => {
