@@ -13,7 +13,7 @@
   "dependencies": {
     "express": "^4.21.2",
     "@hookform/resolvers": "^3.3.4",
-"zod": "^3.23.8"
+    "zod": "^3.24.2",
     "http": "0.0.1-security",
     "ws": "^8.18.0",
     "drizzle-orm": "^0.39.1",
@@ -30,7 +30,6 @@
     "multer-storage-cloudinary": "^4.0.0",
     "cloudinary": "^1.40.0",
     "@supabase/supabase-js": "^2.54.0",
-    "zod": "^3.24.2",
     "zod-validation-error": "^3.4.0",
     "clsx": "^2.1.1",
     "date-fns": "^3.6.0",
