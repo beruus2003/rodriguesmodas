@@ -39,7 +39,7 @@ export function useCart() {
   } = useQuery<CartItemWithProduct[]>({
     queryKey,
     queryFn: async () => {
-      if (!user) return []; // Retorna vazio se não houver usuário, por segurança
+      if (!user) return [];
       const res = await apiRequest("GET", `/api/cart/${user.id}`);
       if (!res.ok) throw new Error("Falha ao buscar o carrinho");
       return res.json();
@@ -47,51 +47,26 @@ export function useCart() {
     enabled: !!user,
   });
 
-  const useCartMutation = <TVariables>(
-    mutationFn: (variables: TVariables) => Promise<any>,
-    { successMessage, onMutate }: { successMessage: string, onMutate: (variables: TVariables) => void }
-  ) => {
-    return useMutation({
-      mutationFn,
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey });
-        if (!isMerging.current) toast({ title: successMessage });
-      },
-      onError: (err) => {
-        console.error("Erro na operação do carrinho:", err);
-        if (!isMerging.current) toast({ title: "Erro", description: "A operação falhou.", variant: "destructive" });
-      },
-    });
-  };
-
   const addToCartMutation = useMutation({
     mutationFn: (item: { product: Product; quantity: number; selectedColor: string; selectedSize: string; }) => {
       if (user) {
         return apiRequest("POST", "/api/cart", { userId: user.id, productId: item.product.id, ...item });
-      } else {
-        setGuestCart(current => { /* ... lógica guest ... */ });
-        return Promise.resolve();
-      }
+      } else { /* ...lógica guest... */ return Promise.resolve(); }
     },
-    // ================== A NOVA LÓGICA DE ATUALIZAÇÃO ==================
     onSuccess: (newItem: CartItem, variables) => {
-      // Atualiza o cache manualmente e instantaneamente
-      queryClient.setQueryData(queryKey, (oldData: CartItemWithProduct[] | undefined) => {
-        const data = oldData || [];
-        const newItemWithProduct = { ...newItem, product: variables.product };
-        
-        // Verifica se o item já existe para decidir se atualiza ou adiciona
-        const existingItemIndex = data.findIndex(item => item.id === newItem.id);
+      queryClient.setQueryData(queryKey, (oldData: CartItemWithProduct[] | undefined = []) => {
+        const newItemWithProduct = { ...(newItem || variables), product: variables.product };
+        const existingItemIndex = oldData.findIndex(item => item.product.id === variables.product.id && item.selectedColor === variables.selectedColor && item.selectedSize === variables.selectedSize);
         if (existingItemIndex > -1) {
-          const updatedData = [...data];
-          updatedData[existingItemIndex] = newItemWithProduct;
+          const updatedData = [...oldData];
+          updatedData[existingItemIndex].quantity += variables.quantity;
           return updatedData;
         }
-        return [...data, newItemWithProduct];
+        return [...oldData, newItemWithProduct];
       });
       if (!isMerging.current) toast({ title: "Produto adicionado!" });
     },
-    onError: (err) => { /* ... */ }
+    onError: (err) => { toast({ title: "Erro", description: "Não foi possível adicionar o item.", variant: "destructive" }); },
   });
 
   const updateQuantityMutation = useMutation({
@@ -100,13 +75,12 @@ export function useCart() {
       else { setGuestCart(c => c.map(i => i.id === itemId ? { ...i, quantity } : i).filter(i => i.quantity > 0)); return Promise.resolve(); }
     },
     onSuccess: (updatedItem: CartItem, variables) => {
-      queryClient.setQueryData(queryKey, (oldData: CartItemWithProduct[] | undefined) => {
-        if (!oldData) return [];
-        return oldData.map(item => item.id === variables.itemId ? { ...item, quantity: variables.quantity } : item).filter(item => item.quantity > 0);
-      });
+      queryClient.setQueryData(queryKey, (oldData: CartItemWithProduct[] | undefined = []) => 
+        oldData.map(item => item.id === variables.itemId ? { ...item, quantity: variables.quantity } : item).filter(item => item.quantity > 0)
+      );
       toast({ title: "Carrinho atualizado." });
     },
-    onError: (err) => { /* ... */ }
+    onError: (err) => { toast({ title: "Erro", description: "Não foi possível atualizar o item.", variant: "destructive" }); },
   });
 
   const removeFromCartMutation = useMutation({
@@ -115,16 +89,14 @@ export function useCart() {
       else { setGuestCart(c => c.filter(item => item.id !== itemId)); return Promise.resolve(); }
     },
     onSuccess: (removedItem: CartItem, itemId) => {
-      queryClient.setQueryData(queryKey, (oldData: CartItemWithProduct[] | undefined) => {
-        if (!oldData) return [];
-        return oldData.filter(item => item.id !== itemId);
-      });
+      queryClient.setQueryData(queryKey, (oldData: CartItemWithProduct[] | undefined = []) => 
+        oldData.filter(item => item.id !== itemId)
+      );
       toast({ title: "Item removido." });
     },
-    onError: (err) => { /* ... */ }
+    onError: (err) => { toast({ title: "Erro", description: "Não foi possível remover o item.", variant: "destructive" }); },
   });
   
-  // (Efeito de fusão e cálculos continuam iguais)
   useEffect(() => {
     const guestCartOnLogin = getGuestCartFromStorage();
     if (user && guestCartOnLogin.length > 0) {
@@ -140,14 +112,34 @@ export function useCart() {
     }
   }, [user]);
 
+  // ================== CÁLCULOS TORNADOS "À PROVA DE BALAS" ==================
   const subtotal = cartItems.reduce((total, item) => {
-    const price = typeof item.product.price === 'string' ? parseFloat(item.product.price) : item.product.price;
-    return total + (price * item.quantity);
+    // Verificação de segurança: Ignora itens malformados
+    if (!item || !item.product || item.product.price == null) {
+      return total;
+    }
+    const price = parseFloat(String(item.product.price)); // Força a conversão para string e depois float
+    const quantity = Number(item.quantity) || 0; // Garante que a quantidade é um número
+    
+    // Se o preço não for um número válido, não soma nada
+    if (isNaN(price)) {
+      return total;
+    }
+    
+    return total + (price * quantity);
   }, 0);
-  const itemCount = cartItems.reduce((total, item) => total + item.quantity, 0);
+
+  const itemCount = cartItems.reduce((total, item) => {
+    const quantity = Number(item?.quantity) || 0; // Garante que a quantidade é um número
+    return total + quantity;
+  }, 0);
+  // =========================================================================
 
   return {
-    cartItems, subtotal, itemCount, isLoading,
+    cartItems,
+    subtotal,
+    itemCount,
+    isLoading,
     isUpdating: addToCartMutation.isPending || updateQuantityMutation.isPending || removeFromCartMutation.isPending,
     addToCart: addToCartMutation.mutate,
     updateQuantity: updateQuantityMutation.mutate,
