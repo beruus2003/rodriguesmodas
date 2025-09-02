@@ -18,7 +18,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Ao carregar o site, ele pega o usuário que já pode estar salvo no localStorage
+    // Ao carregar o site, pega o usuário que já pode estar salvo no localStorage
     const currentUser = authService.getCurrentUser();
     setUser(currentUser);
     setLoading(false);
