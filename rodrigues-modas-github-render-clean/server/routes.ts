@@ -73,7 +73,15 @@ router.get("/products/:id", async (req, res) => {
 router.get("/cart/:userId", async (req, res) => {
   try {
     const items = await storage.getCartItems(req.params.userId);
-    res.json(items);
+
+    // calcula subtotal de cada item e total do carrinho
+    const itemsWithSubtotal = items.map((item: any) => ({
+      ...item,
+      subtotal: item.product ? item.product.price * item.quantity : 0,
+    }));
+    const total = itemsWithSubtotal.reduce((sum, item) => sum + item.subtotal, 0);
+
+    res.json({ items: itemsWithSubtotal, total });
   } catch (err) {
     console.error("Erro ao buscar carrinho:", err);
     res.status(500).json({ error: "Erro ao buscar carrinho" });
