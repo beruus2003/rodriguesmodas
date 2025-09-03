@@ -30,19 +30,6 @@ router.post("/login", async (req, res) => {
   }
 });
 
-router.get("/verify-email/:token", async (req, res) => {
-  try {
-    const user = await storage.verifyUserEmail(req.params.token);
-    if (!user) {
-      return res.status(400).json({ error: "Token inválido" });
-    }
-    res.json(user);
-  } catch (err) {
-    console.error("Erro ao verificar e-mail:", err);
-    res.status(500).json({ error: "Erro ao verificar e-mail" });
-  }
-});
-
 // =======================
 // ROTAS DE PRODUTOS
 // =======================
@@ -74,24 +61,9 @@ router.get("/cart/:userId", async (req, res) => {
   try {
     const items = await storage.getCartItems(req.params.userId);
 
-    const itemsWithSubtotal = [];
-    let total = 0;
+    const total = items.reduce((sum, item) => sum + item.subtotal, 0);
 
-    for (const item of items) {
-      const product = await storage.getProductById(item.productId);
-      if (!product) continue;
-
-      const subtotal = product.price * item.quantity;
-      total += subtotal;
-
-      itemsWithSubtotal.push({
-        ...item,
-        product,
-        subtotal,
-      });
-    }
-
-    res.json({ items: itemsWithSubtotal, total });
+    res.json({ items, total });
   } catch (err) {
     console.error("Erro ao buscar carrinho:", err);
     res.status(500).json({ error: "Erro ao buscar carrinho" });
@@ -108,21 +80,10 @@ router.post("/cart/add", async (req, res) => {
   }
 });
 
-router.put("/cart/update/:id", async (req, res) => {
-  try {
-    const item = await storage.updateCartItem(req.params.id, req.body.quantity);
-    if (!item) return res.status(404).json({ error: "Item não encontrado" });
-    res.json(item);
-  } catch (err) {
-    console.error("Erro ao atualizar item do carrinho:", err);
-    res.status(500).json({ error: "Erro ao atualizar item do carrinho" });
-  }
-});
-
 router.delete("/cart/remove/:id", async (req, res) => {
   try {
-    const success = await storage.removeFromCart(req.params.id);
-    res.json({ success });
+    await storage.removeCartItem(req.params.id);
+    res.json({ success: true });
   } catch (err) {
     console.error("Erro ao remover item do carrinho:", err);
     res.status(500).json({ error: "Erro ao remover item do carrinho" });
@@ -131,8 +92,8 @@ router.delete("/cart/remove/:id", async (req, res) => {
 
 router.delete("/cart/clear/:userId", async (req, res) => {
   try {
-    const success = await storage.clearCart(req.params.userId);
-    res.json({ success });
+    await storage.clearCart(req.params.userId);
+    res.json({ success: true });
   } catch (err) {
     console.error("Erro ao limpar carrinho:", err);
     res.status(500).json({ error: "Erro ao limpar carrinho" });
@@ -144,51 +105,8 @@ router.delete("/cart/clear/:userId", async (req, res) => {
 // =======================
 router.post("/orders", async (req, res) => {
   try {
-    const { userId, address, paymentMethod } = req.body;
-
-    // pega os itens do carrinho
-    const cartItems = await storage.getCartItems(userId);
-    if (cartItems.length === 0) {
-      return res.status(400).json({ error: "Carrinho vazio" });
-    }
-
-    // calcula total
-    let total = 0;
-    const itemsWithPrice = [];
-    for (const item of cartItems) {
-      const product = await storage.getProductById(item.productId);
-      if (!product) {
-        return res.status(400).json({ error: `Produto ${item.productId} não encontrado` });
-      }
-
-      const subtotal = product.price * item.quantity;
-      total += subtotal;
-
-      itemsWithPrice.push({
-        productId: product.id,
-        quantity: item.quantity,
-        price: product.price,
-        subtotal,
-      });
-    }
-
-    // cria o pedido
-    const order = await storage.createOrder({
-      userId,
-      address,
-      paymentMethod,
-      total,
-      status: "pending",
-      createdAt: new Date(),
-    });
-
-    // limpa carrinho
-    await storage.clearCart(userId);
-
-    res.json({
-      ...order,
-      items: itemsWithPrice,
-    });
+    const order = await storage.createOrder(req.body);
+    res.json(order);
   } catch (err) {
     console.error("Erro ao criar pedido:", err);
     res.status(500).json({ error: "Erro ao criar pedido" });
@@ -197,22 +115,11 @@ router.post("/orders", async (req, res) => {
 
 router.get("/orders/:userId", async (req, res) => {
   try {
-    const orders = await storage.getOrdersByUser(req.params.userId);
+    const orders = await storage.getUserOrders(req.params.userId);
     res.json(orders);
   } catch (err) {
     console.error("Erro ao buscar pedidos:", err);
     res.status(500).json({ error: "Erro ao buscar pedidos" });
-  }
-});
-
-router.put("/orders/:id/status", async (req, res) => {
-  try {
-    const order = await storage.updateOrderStatus(req.params.id, req.body.status);
-    if (!order) return res.status(404).json({ error: "Pedido não encontrado" });
-    res.json(order);
-  } catch (err) {
-    console.error("Erro ao atualizar pedido:", err);
-    res.status(500).json({ error: "Erro ao atualizar pedido" });
   }
 });
 
@@ -221,7 +128,7 @@ router.put("/orders/:id/status", async (req, res) => {
 // =======================
 router.post("/mp/transactions", async (req, res) => {
   try {
-    const tx = await storage.createMpTransaction(req.body);
+    const tx = await storage.createTransaction(req.body);
     res.json(tx);
   } catch (err) {
     console.error("Erro ao criar transação:", err);
@@ -231,7 +138,7 @@ router.post("/mp/transactions", async (req, res) => {
 
 router.get("/mp/transactions/:paymentId", async (req, res) => {
   try {
-    const tx = await storage.getMpTransactionByPaymentId(req.params.paymentId);
+    const tx = await storage.getTransactionByPaymentId(req.params.paymentId);
     if (!tx) return res.status(404).json({ error: "Transação não encontrada" });
     res.json(tx);
   } catch (err) {
@@ -242,9 +149,8 @@ router.get("/mp/transactions/:paymentId", async (req, res) => {
 
 router.put("/mp/transactions/:paymentId/status", async (req, res) => {
   try {
-    const tx = await storage.updateMpTransactionStatus(req.params.paymentId, req.body.status);
-    if (!tx) return res.status(404).json({ error: "Transação não encontrada" });
-    res.json(tx);
+    await storage.updateTransactionStatus(req.params.paymentId, req.body.status);
+    res.json({ success: true });
   } catch (err) {
     console.error("Erro ao atualizar transação:", err);
     res.status(500).json({ error: "Erro ao atualizar transação" });
