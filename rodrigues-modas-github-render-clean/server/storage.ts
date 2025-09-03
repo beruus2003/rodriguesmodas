@@ -1,5 +1,5 @@
 import { db } from "./db"; // ajuste o caminho se necessário
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import {
   users,
   products,
@@ -78,16 +78,49 @@ export class DrizzleStorage {
   }
 
   // --- CARRINHO ---
-  async getCartItems(userId: string): Promise<CartItem[]> {
-    return await db
-      .select()
+  async getCartItems(userId: string): Promise<(CartItem & { product: Product })[]> {
+    const result = await db
+      .select({
+        id: cartItems.id,
+        userId: cartItems.userId,
+        productId: cartItems.productId,
+        quantity: cartItems.quantity,
+        product: products, // inclui os dados do produto
+      })
       .from(cartItems)
+      .leftJoin(products, eq(cartItems.productId, products.id))
       .where(eq(cartItems.userId, userId));
+
+    return result.map((row) => ({
+      id: row.id,
+      userId: row.userId,
+      productId: row.productId,
+      quantity: row.quantity,
+      product: row.product!,
+    }));
   }
 
   async addToCart(item: InsertCartItem): Promise<CartItem> {
-    const result = await db.insert(cartItems).values(item).returning();
-    return result[0];
+    // Verifica se já existe o produto no carrinho do usuário
+    const existing = await db
+      .select()
+      .from(cartItems)
+      .where(and(eq(cartItems.userId, item.userId), eq(cartItems.productId, item.productId)));
+
+    if (existing[0]) {
+      // Atualiza a quantidade
+      const newQuantity = existing[0].quantity + item.quantity;
+      const updated = await db
+        .update(cartItems)
+        .set({ quantity: newQuantity })
+        .where(eq(cartItems.id, existing[0].id))
+        .returning();
+      return updated[0];
+    } else {
+      // Insere novo item
+      const result = await db.insert(cartItems).values(item).returning();
+      return result[0];
+    }
   }
 
   async updateCartItem(id: string, quantity: number): Promise<CartItem | undefined> {
@@ -168,4 +201,5 @@ export class DrizzleStorage {
     return result[0];
   }
 }
+
 export const storage = new DrizzleStorage();
