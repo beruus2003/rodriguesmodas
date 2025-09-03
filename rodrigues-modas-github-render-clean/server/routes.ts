@@ -74,12 +74,22 @@ router.get("/cart/:userId", async (req, res) => {
   try {
     const items = await storage.getCartItems(req.params.userId);
 
-    // calcula subtotal de cada item e total do carrinho
-    const itemsWithSubtotal = items.map((item: any) => ({
-      ...item,
-      subtotal: item.product ? item.product.price * item.quantity : 0,
-    }));
-    const total = itemsWithSubtotal.reduce((sum, item) => sum + item.subtotal, 0);
+    const itemsWithSubtotal = [];
+    let total = 0;
+
+    for (const item of items) {
+      const product = await storage.getProductById(item.productId);
+      if (!product) continue;
+
+      const subtotal = product.price * item.quantity;
+      total += subtotal;
+
+      itemsWithSubtotal.push({
+        ...item,
+        product,
+        subtotal,
+      });
+    }
 
     res.json({ items: itemsWithSubtotal, total });
   } catch (err) {
@@ -134,8 +144,51 @@ router.delete("/cart/clear/:userId", async (req, res) => {
 // =======================
 router.post("/orders", async (req, res) => {
   try {
-    const order = await storage.createOrder(req.body);
-    res.json(order);
+    const { userId, address, paymentMethod } = req.body;
+
+    // pega os itens do carrinho
+    const cartItems = await storage.getCartItems(userId);
+    if (cartItems.length === 0) {
+      return res.status(400).json({ error: "Carrinho vazio" });
+    }
+
+    // calcula total
+    let total = 0;
+    const itemsWithPrice = [];
+    for (const item of cartItems) {
+      const product = await storage.getProductById(item.productId);
+      if (!product) {
+        return res.status(400).json({ error: `Produto ${item.productId} não encontrado` });
+      }
+
+      const subtotal = product.price * item.quantity;
+      total += subtotal;
+
+      itemsWithPrice.push({
+        productId: product.id,
+        quantity: item.quantity,
+        price: product.price,
+        subtotal,
+      });
+    }
+
+    // cria o pedido
+    const order = await storage.createOrder({
+      userId,
+      address,
+      paymentMethod,
+      total,
+      status: "pending",
+      createdAt: new Date(),
+    });
+
+    // limpa carrinho
+    await storage.clearCart(userId);
+
+    res.json({
+      ...order,
+      items: itemsWithPrice,
+    });
   } catch (err) {
     console.error("Erro ao criar pedido:", err);
     res.status(500).json({ error: "Erro ao criar pedido" });
