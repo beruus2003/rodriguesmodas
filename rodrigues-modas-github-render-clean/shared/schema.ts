@@ -35,7 +35,7 @@ export const products = pgTable("products", {
 // Itens do carrinho
 export const cartItems = pgTable("cart_items", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: varchar("user_id").references(() => users.id, { onDelete: "cascade" }),
+  userId: varchar("user_id"), // Removido references para permitir usuários guest
   productId: varchar("product_id").notNull().references(() => products.id, { onDelete: "cascade" }),
   quantity: integer("quantity").notNull().default(1),
   selectedColor: text("selected_color").notNull(),
@@ -113,21 +113,12 @@ export const insertProductSchema = createInsertSchema(products).pick({
   isActive: true,
 });
 
-export const insertCartItemSchema = createInsertSchema(cartItems, {
-  quantity: true,
-  selectedColor: true,
-  selectedSize: true,
-}).refine((data) => {
-  return data.quantity > 0;
-}, {
-  message: "Quantidade deve ser maior que 0",
-  path: ["quantity"]
-}).refine((data) => {
-  // Permitir userId null para usuários guest, mas se fornecido deve ser string válida
-  return !data.userId || typeof data.userId === 'string';
-}, {
-  message: "userId deve ser uma string válida ou null",
-  path: ["userId"]
+export const insertCartItemSchema = z.object({
+  userId: z.string(),
+  productId: z.string(),
+  quantity: z.number().min(1, { message: "Quantidade deve ser maior que 0" }),
+  selectedColor: z.string().min(1, { message: "Cor deve ser selecionada" }),
+  selectedSize: z.string().min(1, { message: "Tamanho deve ser selecionado" }),
 });
 
 // Schema mais flexível para pedidos
