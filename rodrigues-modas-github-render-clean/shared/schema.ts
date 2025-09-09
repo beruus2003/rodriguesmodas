@@ -3,15 +3,19 @@ import { pgTable, text, varchar, decimal, integer, boolean, timestamp, jsonb } f
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-// Usuários com role-based access
+// ======================= ALTERAÇÕES AQUI =======================
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   email: text("email").notNull().unique(),
   name: text("name").notNull(),
+  password: text("password"), // <-- Adicionado para a senha criptografada
   phone: text("phone"),
   role: text("role").notNull().default("customer"), // "customer" | "admin"
+  emailVerified: timestamp("email_verified"), // <-- Adicionado para data de verificação
+  verificationToken: text("verification_token"), // <-- Adicionado para o token
   createdAt: timestamp("created_at").defaultNow(),
 });
+// ======================= FIM DAS ALTERAÇÕES =======================
 
 // Produtos
 export const products = pgTable("products", {
@@ -19,10 +23,10 @@ export const products = pgTable("products", {
   name: text("name").notNull(),
   description: text("description").notNull(),
   price: decimal("price", { precision: 10, scale: 2 }).notNull(),
-  category: text("category").notNull(), // "sutias", "calcinhas", "conjuntos", "camisolas"
-  images: jsonb("images").$type<string[]>().default([]), // URLs das imagens
-  colors: jsonb("colors").$type<string[]>().default([]), // Cores disponíveis
-  sizes: jsonb("sizes").$type<string[]>().default([]), // Tamanhos disponíveis
+  category: text("category").notNull(),
+  images: jsonb("images").$type<string[]>().default([]),
+  colors: jsonb("colors").$type<string[]>().default([]),
+  sizes: jsonb("sizes").$type<string[]>().default([]),
   stock: integer("stock").notNull().default(0),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").defaultNow(),
@@ -31,7 +35,7 @@ export const products = pgTable("products", {
 // Itens do carrinho
 export const cartItems = pgTable("cart_items", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  userId: varchar("user_id"), // Removido references para permitir usuários guest
   productId: varchar("product_id").notNull().references(() => products.id, { onDelete: "cascade" }),
   quantity: integer("quantity").notNull().default(1),
   selectedColor: text("selected_color").notNull(),
@@ -43,11 +47,11 @@ export const cartItems = pgTable("cart_items", {
 export const orders = pgTable("orders", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull().references(() => users.id),
-  status: text("status").notNull().default("pending"), // "pending", "confirmed", "shipped", "delivered", "cancelled"
+  status: text("status").notNull().default("pending"),
   paymentMethod: text("payment_method", { 
     enum: ["credit_card", "debit_card", "pix", "whatsapp"] 
   }).notNull(),
-  paymentStatus: text("payment_status").notNull().default("pending"), // "pending", "approved", "rejected", "cancelled"
+  paymentStatus: text("payment_status").notNull().default("pending"),
   total: decimal("total", { precision: 10, scale: 2 }).notNull().$type<string>(),
   customerInfo: jsonb("customer_info").$type<{
     name: string;
@@ -62,7 +66,7 @@ export const orders = pgTable("orders", {
     selectedColor: string;
     selectedSize: string;
   }>>().notNull(),
-  mpPaymentId: text("mp_payment_id"), // ID do pagamento no Mercado Pago
+  mpPaymentId: text("mp_payment_id"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -70,24 +74,32 @@ export const orders = pgTable("orders", {
 export const mpTransactions = pgTable("mp_transactions", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   orderId: varchar("order_id").notNull().references(() => orders.id, { onDelete: "cascade" }),
-  paymentId: text("payment_id").notNull().unique(), // ID do pagamento no MP
-  status: text("status").notNull(), // approved, pending, rejected, cancelled
-  statusDetail: text("status_detail"), // Detalhe do status
-  paymentMethod: text("payment_method").notNull(), // credit_card, debit_card, pix
-  paymentTypeId: text("payment_type_id"), // Tipo específico (visa, master, etc)
+  paymentId: text("payment_id").notNull().unique(),
+  status: text("status").notNull(),
+  statusDetail: text("status_detail"),
+  paymentMethod: text("payment_method").notNull(),
+  paymentTypeId: text("payment_type_id"),
   amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
-  transactionData: jsonb("transaction_data").$type<any>().default({}), // Dados completos da transação
+  transactionData: jsonb("transaction_data").$type<any>().default({}),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// ======================= ALTERAÇÕES AQUI =======================
 // Esquemas de inserção
-export const insertUserSchema = createInsertSchema(users).pick({
+export const insertUserSchema = createInsertSchema(users, {
+  email: z.string().email({ message: "E-mail inválido" }),
+  name: z.string().min(3, { message: "Nome precisa ter pelo menos 3 caracteres" }),
+  password: z.string().min(6, { message: "Senha precisa ter pelo menos 6 caracteres" }),
+}).pick({
   email: true,
   name: true,
+  password: true,
   phone: true,
   role: true,
+  verificationToken: true,
 });
+// ======================= FIM DAS ALTERAÇÕES =======================
 
 export const insertProductSchema = createInsertSchema(products).pick({
   name: true,
@@ -101,12 +113,12 @@ export const insertProductSchema = createInsertSchema(products).pick({
   isActive: true,
 });
 
-export const insertCartItemSchema = createInsertSchema(cartItems).pick({
-  userId: true,
-  productId: true,
-  quantity: true,
-  selectedColor: true,
-  selectedSize: true,
+export const insertCartItemSchema = z.object({
+  userId: z.string(),
+  productId: z.string(),
+  quantity: z.number().min(1, { message: "Quantidade deve ser maior que 0" }),
+  selectedColor: z.string().min(1, { message: "Cor deve ser selecionada" }),
+  selectedSize: z.string().min(1, { message: "Tamanho deve ser selecionado" }),
 });
 
 // Schema mais flexível para pedidos
