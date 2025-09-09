@@ -63,7 +63,7 @@ function App() {
         <div className="min-h-screen bg-background">
           <Header onCartOpen={handleCartOpen} />
           
-          <main>
+          <main className="pt-16">
             <Router />
           </main>
           
