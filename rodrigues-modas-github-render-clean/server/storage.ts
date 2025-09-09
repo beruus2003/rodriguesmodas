@@ -2,16 +2,69 @@
 import { db } from './db'; // Nossa conexão com o banco de dados Neon
 import { 
   products as productsTable,
-  // Outras tabelas serão usadas no futuro
+  users as usersTable,
+  cartItems as cartItemsTable,
+  orders as ordersTable,
+  mpTransactions as mpTransactionsTable,
+  type User,
+  type InsertUser,
   type Product,
   type InsertProduct,
-  // Outros tipos...
+  type CartItem,
+  type InsertCartItem,
+  type Order,
+  type InsertOrder,
+  type MpTransaction,
+  type InsertMpTransaction
 } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import type { IStorage } from './storage.interface'; // O "contrato" que criamos
 
 class DrizzleStorage implements IStorage {
-  // --- PRODUTOS ---
+  // ======================= USUÁRIOS =======================
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    return await db.query.users.findFirst({
+      where: eq(usersTable.email, email.toLowerCase()),
+    });
+  }
+  
+  async getUserByVerificationToken(token: string): Promise<User | undefined> {
+    return await db.query.users.findFirst({
+      where: eq(usersTable.verificationToken, token),
+    });
+  }
+
+  async createUser(user: InsertUser): Promise<User> {
+    const result = await db.insert(usersTable).values({
+      ...user,
+      email: user.email.toLowerCase() // Sempre salva o email em minúsculas para evitar duplicatas
+    }).returning();
+    return result[0];
+  }
+
+  async verifyUser(id: string): Promise<User | undefined> {
+    const result = await db.update(usersTable)
+      .set({ emailVerified: new Date(), verificationToken: null }) // Marca como verificado e limpa o token
+      .where(eq(usersTable.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async getUser(id: string): Promise<User | undefined> {
+    return await db.query.users.findFirst({
+      where: eq(usersTable.id, id),
+    });
+  }
+
+  async updateUser(id: string, user: Partial<User>): Promise<User | undefined> {
+    const result = await db.update(usersTable)
+      .set(user)
+      .where(eq(usersTable.id, id))
+      .returning();
+    return result[0];
+  }
+
+  // ======================= PRODUTOS =======================
   async getProducts(): Promise<Product[]> {
     console.log("Buscando produtos do banco de dados Neon...");
     const products = await db.query.products.findMany({
@@ -50,27 +103,107 @@ class DrizzleStorage implements IStorage {
     return result.length > 0;
   }
 
-  // --- MÉTODOS DE CARRINHO, PEDIDOS, ETC. (A SEREM IMPLEMENTADOS NO FUTURO) ---
-  // Deixei os outros métodos aqui para que o código não quebre, mas eles
-  // ainda não fazem nada. O foco é resolver o problema dos produtos.
-  async getUser(id: string) { throw new Error("Method not implemented."); }
-  async getUserByEmail(email: string) { throw new Error("Method not implemented."); }
-  async createUser(user: any) { throw new Error("Method not implemented."); }
-  async updateUser(id: string, user: any) { throw new Error("Method not implemented."); }
-  async getCartItems(userId: string) { throw new Error("Method not implemented."); }
-  async addToCart(item: any) { throw new Error("Method not implemented."); }
-  async updateCartItem(id: string, quantity: number) { throw new Error("Method not implemented."); }
-  async removeFromCart(id: string) { throw new Error("Method not implemented."); }
-  async clearCart(userId: string) { throw new Error("Method not implemented."); }
-  async getOrders() { throw new Error("Method not implemented."); }
-  async getOrdersByUser(userId: string) { throw new Error("Method not implemented."); }
-  async getOrder(id: string) { throw new Error("Method not implemented."); }
-  async createOrder(order: any) { throw new Error("Method not implemented."); }
-  async updateOrderStatus(id: string, status: string) { throw new Error("Method not implemented."); }
-  async updateOrderPayment(id: string, paymentId: string, paymentStatus: string) { throw new Error("Method not implemented."); }
-  async createMpTransaction(transaction: any) { throw new Error("Method not implemented."); }
-  async getMpTransaction(paymentId: string) { throw new Error("Method not implemented."); }
-  async updateMpTransaction(paymentId: string, data: any) { throw new Error("Method not implemented."); }
+  // ======================= CARRINHO =======================
+  async getCartItems(userId: string): Promise<CartItem[]> {
+    return await db.query.cartItems.findMany({
+      where: eq(cartItemsTable.userId, userId),
+    });
+  }
+
+  async addToCart(item: InsertCartItem): Promise<CartItem> {
+    console.log("🛒 Tentando adicionar item ao carrinho:", JSON.stringify(item, null, 2));
+    try {
+      const result = await db.insert(cartItemsTable).values(item).returning();
+      console.log("✅ Item inserido no banco com sucesso:", JSON.stringify(result[0], null, 2));
+      return result[0];
+    } catch (error) {
+      console.error("❌ Erro ao inserir no banco de dados:", error);
+      throw error;
+    }
+  }
+
+  async updateCartItem(id: string, quantity: number): Promise<CartItem | undefined> {
+    // Se a quantidade for 0 ou menor, remove o item do carrinho
+    if (quantity <= 0) {
+      await this.removeFromCart(id);
+      return undefined;
+    }
+    
+    const result = await db.update(cartItemsTable)
+      .set({ quantity })
+      .where(eq(cartItemsTable.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async removeFromCart(id: string): Promise<boolean> {
+    const result = await db.delete(cartItemsTable)
+      .where(eq(cartItemsTable.id, id))
+      .returning({ id: cartItemsTable.id });
+    return result.length > 0;
+  }
+
+  async clearCart(userId: string): Promise<void> {
+    await db.delete(cartItemsTable).where(eq(cartItemsTable.userId, userId));
+  }
+
+  // ======================= PEDIDOS =======================
+  async getOrders(): Promise<Order[]> {
+    return await db.query.orders.findMany();
+  }
+
+  async getOrdersByUser(userId: string): Promise<Order[]> {
+    return await db.query.orders.findMany({
+      where: eq(ordersTable.userId, userId),
+    });
+  }
+
+  async getOrder(id: string): Promise<Order | undefined> {
+    return await db.query.orders.findFirst({
+      where: eq(ordersTable.id, id),
+    });
+  }
+
+  async createOrder(order: InsertOrder): Promise<Order> {
+    const result = await db.insert(ordersTable).values(order).returning();
+    return result[0];
+  }
+
+  async updateOrderStatus(id: string, status: string): Promise<Order | undefined> {
+    const result = await db.update(ordersTable)
+      .set({ status })
+      .where(eq(ordersTable.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async updateOrderPayment(id: string, paymentId: string, paymentStatus: string): Promise<Order | undefined> {
+    const result = await db.update(ordersTable)
+      .set({ paymentId, paymentStatus })
+      .where(eq(ordersTable.id, id))
+      .returning();
+    return result[0];
+  }
+
+  // ======================= TRANSAÇÕES MERCADO PAGO =======================
+  async createMpTransaction(transaction: InsertMpTransaction): Promise<MpTransaction> {
+    const result = await db.insert(mpTransactionsTable).values(transaction).returning();
+    return result[0];
+  }
+
+  async getMpTransaction(paymentId: string): Promise<MpTransaction | undefined> {
+    return await db.query.mpTransactions.findFirst({
+      where: eq(mpTransactionsTable.paymentId, paymentId),
+    });
+  }
+
+  async updateMpTransaction(paymentId: string, data: Partial<MpTransaction>): Promise<MpTransaction | undefined> {
+    const result = await db.update(mpTransactionsTable)
+      .set(data)
+      .where(eq(mpTransactionsTable.paymentId, paymentId))
+      .returning();
+    return result[0];
+  }
 }
 
 export const storage = new DrizzleStorage();
