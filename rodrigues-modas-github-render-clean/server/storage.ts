@@ -124,6 +124,12 @@ class DrizzleStorage implements IStorage {
   }
 
   async updateCartItem(id: string, quantity: number): Promise<CartItem | undefined> {
+    // Se a quantidade for 0 ou menor, remove o item do carrinho
+    if (quantity <= 0) {
+      await this.removeFromCart(id);
+      return undefined;
+    }
+    
     const result = await db.update(cartItemsTable)
       .set({ quantity })
       .where(eq(cartItemsTable.id, id))
